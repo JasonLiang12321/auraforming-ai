@@ -12,51 +12,64 @@ gemini_bp = Blueprint("gemini", __name__)
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 genai.configure(api_key=GEMINI_API_KEY)
 
+model = genai.GenerativeModel(model_name="gemini-2.0-flash")
+
 @gemini_bp.post("/gemini")
 def gemini_endpoint():
     try:
-        # Parse JSON data from the request
         data = request.get_json()
-        conversation = data.get("conversation", [])
-        required_keys = data.get("required_keys", [])
-
-        if not conversation or not required_keys:
-            return jsonify({"error": "Missing conversation or required_keys"}), 400
-
-        # Build the prompt for Gemini
-        conversation_text = "\n".join(
-            [f"{msg['role'].capitalize()}: {msg['message']}" for msg in conversation]
-        )
+        user_input = data.get("user_input", "")
+        form_field = data.get("form_field", "")
+        field_context = data.get("field_context", "")
         
-        prompt = f"""Based on the following conversation, extract the information and return ONLY a JSON object with these keys: {', '.join(required_keys)}.
+        if not user_input or not form_field:
+            return jsonify({"error": "Missing user_input or form_field"}), 400
 
-Conversation:
-{conversation_text}
+        # Single call to Gemini: analyze and generate response
+        prompt = f"""You are an AI assistant helping users fill out a form. Analyze the user's input and determine the next action.
 
-Return ONLY valid JSON with these exact keys: {json.dumps(required_keys)}
-Do not add any additional keys or fields."""
+Form field: "{form_field}"
+Field context: "{field_context}"
+User input: "{user_input}"
 
-        # Call Gemini API with JSON response schema
-        model = genai.GenerativeModel(
-            model_name="gemini-2.0-flash",
+Respond with JSON:
+{{
+"collected_value": "the extracted value if data is collected, empty string otherwise",
+"intent": "clarification|acknowledgment|data",
+"response": "your conversational response to the user"
+}}
+
+STRICT Rules:
+- ONLY set intent to "data" if the user clearly provided THEIR OWN information for THIS specific field
+- If the information is ambiguous, unclear, or about someone else, set intent to "clarification"
+- If user asked a question, set intent to "clarification" and explain
+- If user acknowledged understanding, set intent to "acknowledgment" and re-ask the question
+- For "{form_field}" ({field_context}): user must explicitly state THEIR personal data
+- Do NOT assume or infer information
+- When in doubt, ask for clarification"""
+
+        response = model.generate_content(
+            prompt,
             generation_config={
                 "response_mime_type": "application/json",
                 "response_schema": {
                     "type": "object",
-                    "properties": {key: {"type": "string"} for key in required_keys},
-                    "required": required_keys,
+                    "properties": {
+                        "collected_value": {"type": "string"},
+                        "intent": {"type": "string", "enum": ["clarification", "acknowledgment", "data"]},
+                        "response": {"type": "string"},
+                    },
+                    "required": [ "collected_value", "intent", "response"]
                 }
             }
         )
 
-        response = model.generate_content(prompt)
-        
-        # Parse the response
-        extracted_data = json.loads(response.text)
+        result = json.loads(response.text)
 
         return jsonify({
-            "message": "Data extracted successfully",
-            "data": extracted_data
+            "collected_value": result["collected_value"],
+            "intent": result["intent"],
+            "response": result["response"]
         }), 200
 
     except json.JSONDecodeError:
