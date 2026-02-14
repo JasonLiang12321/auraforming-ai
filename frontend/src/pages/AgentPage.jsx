@@ -1,19 +1,80 @@
 import { Conversation } from '@elevenlabs/client'
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
-import PortalHeader from '../components/PortalHeader'
 import { getAgentById, getAgentSignedUrl } from '../services/api'
+
+const MAX_TRANSCRIPT_LINES = 6
 
 export default function AgentPage() {
   const { id } = useParams()
   const conversationRef = useRef(null)
-  const debugSeqRef = useRef(0)
+  const rafRef = useRef(0)
+
   const [agent, setAgent] = useState(null)
   const [loading, setLoading] = useState(true)
+  const [stage, setStage] = useState('welcome')
   const [status, setStatus] = useState('idle')
+  const [mode, setMode] = useState('listening')
   const [micOn, setMicOn] = useState(false)
   const [error, setError] = useState('')
-  const [debugEvents, setDebugEvents] = useState([])
+  const [transcript, setTranscript] = useState([])
+  const [inputLevel, setInputLevel] = useState(0)
+  const [outputLevel, setOutputLevel] = useState(0)
+
+  useEffect(() => {
+    let isMounted = true
+
+    const load = async () => {
+      setLoading(true)
+      setError('')
+      try {
+        const payload = await getAgentById(id)
+        if (!isMounted) return
+        setAgent(payload)
+      } catch {
+        if (!isMounted) return
+        setError('We could not open this interview link right now.')
+      } finally {
+        if (isMounted) setLoading(false)
+      }
+    }
+
+    void load()
+
+    return () => {
+      isMounted = false
+      cancelAnimationFrame(rafRef.current)
+      const session = conversationRef.current
+      if (session) {
+        session.endSession().catch(() => {})
+      }
+    }
+  }, [id])
+
+  useEffect(() => {
+    if (stage !== 'active' || !conversationRef.current) {
+      cancelAnimationFrame(rafRef.current)
+      setInputLevel(0)
+      setOutputLevel(0)
+      return
+    }
+
+    const sample = () => {
+      const session = conversationRef.current
+      if (!session) return
+
+      const nextInput = Number(session.getInputVolume?.() || 0)
+      const nextOutput = Number(session.getOutputVolume?.() || 0)
+
+      setInputLevel((prev) => prev * 0.7 + nextInput * 0.3)
+      setOutputLevel((prev) => prev * 0.7 + nextOutput * 0.3)
+
+      rafRef.current = requestAnimationFrame(sample)
+    }
+
+    rafRef.current = requestAnimationFrame(sample)
+    return () => cancelAnimationFrame(rafRef.current)
+  }, [stage])
 
   const parseStatus = (nextStatus) => {
     if (typeof nextStatus === 'string') return nextStatus
@@ -23,194 +84,130 @@ export default function AgentPage() {
     return 'unknown'
   }
 
-  const addDebug = (label, details = '') => {
-    const timestamp = new Date().toLocaleTimeString()
-    const normalized =
-      typeof details === 'string' ? details : details ? JSON.stringify(details) : ''
-    const next = {
-      id: `${Date.now()}-${debugSeqRef.current++}`,
-      timestamp,
-      label,
-      details: normalized,
+  const appendTranscript = (source, message) => {
+    if (!message?.trim()) return
+    const entry = {
+      id: `${Date.now()}-${Math.random().toString(16).slice(2)}`,
+      source,
+      message: message.trim(),
     }
-    setDebugEvents((prev) => [next, ...prev].slice(0, 80))
+    setTranscript((prev) => [...prev, entry].slice(-MAX_TRANSCRIPT_LINES))
   }
 
-  useEffect(() => {
-    let isMounted = true
-
-    const loadAgent = async () => {
-      addDebug('Loading agent payload', { id })
-      setLoading(true)
-      setError('')
-      try {
-        const payload = await getAgentById(id)
-        if (!isMounted) return
-        setAgent(payload)
-        addDebug('Agent payload loaded', {
-          agent_id: payload.agent_id,
-          has_schema: Boolean(payload.schema),
-        })
-      } catch (err) {
-        if (!isMounted) return
-        setError(err.message)
-        addDebug('Agent load failed', err.message)
-      } finally {
-        if (isMounted) setLoading(false)
-      }
-    }
-
-    loadAgent()
-
-    return () => {
-      isMounted = false
-      const session = conversationRef.current
-      if (session) {
-        addDebug('Unmount cleanup: ending active session')
-        session.endSession().catch(() => {})
-      }
-    }
-  }, [id])
-
   const startInterview = async () => {
-    if (conversationRef.current || status === 'connecting') {
-      addDebug('Start skipped', 'Session already active or connecting')
-      return
-    }
+    if (conversationRef.current || status === 'connecting') return
 
     setError('')
     setStatus('connecting')
-    addDebug('Start interview clicked')
+    setMode('listening')
+    setMicOn(false)
+    setTranscript([])
 
     try {
       if (!navigator.mediaDevices?.getUserMedia) {
-        addDebug('Browser missing getUserMedia')
         throw new Error('This browser does not support microphone capture.')
       }
 
-      addDebug('Requesting microphone permission')
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       stream.getTracks().forEach((track) => track.stop())
-      addDebug('Microphone access granted')
 
-      addDebug('Requesting signed URL from backend')
       const signedUrl = await getAgentSignedUrl(id)
-      try {
-        const parsed = new URL(signedUrl)
-        addDebug('Signed URL received', { host: parsed.host, path: parsed.pathname })
-      } catch {
-        addDebug('Signed URL received (unparsed)')
-      }
 
-      const schemaFields = Array.isArray(agent?.schema?.widget_names) ? agent.schema.widget_names : []
-      const missingFields = schemaFields
-      const dynamicVariables = {
-        FIRST_MISSING_FIELD_NAME: missingFields[0] || 'field',
-        REQUIRED_FIELDS_JSON: JSON.stringify(schemaFields),
-        MISSING_FIELDS_LIST: missingFields.join(', '),
-      }
-      addDebug('Prepared dynamic variables', {
-        first: dynamicVariables.FIRST_MISSING_FIELD_NAME,
-        required_count: schemaFields.length,
-      })
-
-      addDebug('Starting ElevenLabs SDK session')
       const session = await Conversation.startSession({
         signedUrl,
         connectionType: 'websocket',
-        dynamicVariables,
-        onConnect: (event) => {
-          addDebug('SDK onConnect', event)
+        onConnect: () => {
           setStatus('connected')
+          setStage('active')
         },
-        onDisconnect: (event) => {
-          addDebug('SDK onDisconnect', event)
+        onDisconnect: () => {
           conversationRef.current = null
           setStatus('disconnected')
           setMicOn(false)
+          setStage('welcome')
         },
         onStatusChange: (nextStatus) => {
-          addDebug('SDK onStatusChange', nextStatus)
           setStatus(parseStatus(nextStatus))
         },
+        onModeChange: (nextMode) => {
+          const modeValue = typeof nextMode === 'string' ? nextMode : nextMode?.mode || 'listening'
+          setMode(modeValue)
+        },
         onMessage: (message) => {
-          addDebug('SDK onMessage', message)
+          appendTranscript(message?.source || 'ai', message?.message || '')
         },
-        onDebug: (debugMessage) => {
-          addDebug('SDK onDebug', debugMessage)
-        },
-        onError: (event) => {
-          addDebug('SDK onError', event)
-          setError(event?.message || 'Conversation error')
+        onError: (message) => {
+          setError(message ? 'The connection paused for a moment. Please continue when ready.' : 'Conversation error')
         },
       })
 
       conversationRef.current = session
-      addDebug('Session created')
       await session.setMicMuted(true)
       setMicOn(false)
-      addDebug('Mic set to muted by default')
-
-      try {
-        await session.sendUserMessage('Please greet the client and start the interview.')
-        addDebug('Greeting trigger sent')
-      } catch {
-        addDebug('Greeting trigger failed or blocked by agent config')
-        // Greeting can still come from the agent's configured first message.
-      }
     } catch (err) {
       conversationRef.current = null
       setStatus('error')
-      setError(err.message || 'Could not start interview session.')
-      addDebug('Start interview error', err.message)
+      const errorMessage =
+        err instanceof Error && err.message
+          ? err.message
+          : 'We could not start the interview yet. Please check microphone permission and try again.'
+      setError(errorMessage)
+      setStage('welcome')
     }
   }
 
   const endInterview = async () => {
     const session = conversationRef.current
-    if (!session) {
-      addDebug('End skipped', 'No active session')
-      return
-    }
-
-    addDebug('Terminate session clicked')
-
+    if (!session) return
     try {
       await session.endSession()
-      addDebug('Session terminated')
     } finally {
       conversationRef.current = null
       setStatus('idle')
       setMicOn(false)
+      setStage('welcome')
     }
   }
 
   const toggleMic = async () => {
     const session = conversationRef.current
-    if (!session) {
-      addDebug('Mic toggle skipped', 'No active session')
-      return
-    }
-
+    if (!session) return
     try {
       const nextMicOn = !micOn
       await session.setMicMuted(!nextMicOn)
       setMicOn(nextMicOn)
-      addDebug('Mic toggled', nextMicOn ? 'unmuted' : 'muted')
     } catch (err) {
-      setError(err.message || 'Could not update microphone state.')
-      addDebug('Mic toggle error', err.message)
+      setError(err instanceof Error ? err.message : 'Could not update microphone state.')
     }
   }
 
+  const orbState = useMemo(() => {
+    if (status === 'connecting') return 'connecting'
+    if (mode === 'speaking') return 'speaking'
+    if (micOn) return 'listening'
+    return 'idle'
+  }, [micOn, mode, status])
+
+  const orbScale = useMemo(() => {
+    if (orbState === 'speaking') return (1 + Math.min(outputLevel * 0.35, 0.38)).toFixed(3)
+    if (orbState === 'listening') return (1 + Math.min(inputLevel * 0.24, 0.2)).toFixed(3)
+    if (orbState === 'connecting') return '1.02'
+    return '1'
+  }, [inputLevel, orbState, outputLevel])
+
+  const orbCaption = useMemo(() => {
+    if (status === 'connecting') return 'Connecting you to your assistant...'
+    if (mode === 'speaking') return 'I am speaking now. You can interrupt anytime.'
+    if (micOn) return 'I am listening. Take your time.'
+    return 'When you are ready, turn on your microphone and answer at your own pace.'
+  }, [micOn, mode, status])
+
   if (loading) {
     return (
-      <main className="pageShell">
-        <PortalHeader />
-        <section className="hero">
-          <p className="eyebrow">Client Node</p>
-          <h1>Booting Voice Interface</h1>
-          <p className="heroText">Loading agent configuration...</p>
+      <main className="agentShell gateShell">
+        <section className="gateCard">
+          <p className="eyebrow">Preparing Session</p>
+          <h1>Loading your secure interview link...</h1>
         </section>
       </main>
     )
@@ -218,85 +215,62 @@ export default function AgentPage() {
 
   if (!agent) {
     return (
-      <main className="pageShell">
-        <PortalHeader />
-        <section className="hero">
-          <p className="eyebrow">Client Node</p>
-          <h1>Link Signature Not Found</h1>
+      <main className="agentShell gateShell">
+        <section className="gateCard">
+          <p className="eyebrow">Link Error</p>
+          <h1>This interview link is unavailable</h1>
           <p className="error">{error || 'Agent not found.'}</p>
         </section>
       </main>
     )
   }
 
-  return (
-    <main className="pageShell">
-      <PortalHeader />
+  if (stage === 'welcome') {
+    return (
+      <main className="agentShell gateShell">
+        <section className="gateCard">
+          <p className="eyebrow">Secure Intake</p>
+          <h1>We need a few details to complete your form.</h1>
+          <p className="heroText">Press start to begin a gentle voice interview.</p>
+          <button type="button" className="startPulseButton" onClick={startInterview} disabled={status === 'connecting'}>
+            {status === 'connecting' ? 'Requesting microphone...' : 'Start Interview'}
+          </button>
+          {error ? <p className="error">{error}</p> : null}
+        </section>
+      </main>
+    )
+  }
 
-      <section className="hero">
-        <p className="eyebrow">Client Node</p>
-        <h1>Realtime Voice Session</h1>
-        <p className="heroText">
-          Secure channel established. Start the session, then toggle your microphone while responding.
-        </p>
+  return (
+    <main className="agentShell activeShell">
+      <section className="orbStage">
+        <p className="orbEyebrow">Your Form Assistant</p>
+        <div className={`orb ${orbState}`} style={{ '--orb-scale': orbScale }}>
+          <div className="orbCore"></div>
+        </div>
+        <p className="orbCaption">{orbCaption}</p>
       </section>
 
-      <section className="card sessionCard">
-        <div className="sessionMeta">
-          <p>
-            Agent ID <code>{id}</code>
-          </p>
-          <p>
-            Status <span className={`statusDot status-${status}`}></span> <strong>{status}</strong>
-          </p>
-        </div>
-
-        <div className="waveRow" aria-hidden="true">
-          <span className={micOn ? 'waveBar live' : 'waveBar'}></span>
-          <span className={micOn ? 'waveBar live' : 'waveBar'}></span>
-          <span className={micOn ? 'waveBar live' : 'waveBar'}></span>
-          <span className={micOn ? 'waveBar live' : 'waveBar'}></span>
-          <span className={micOn ? 'waveBar live' : 'waveBar'}></span>
-        </div>
-
-        <div className="voiceActions">
-          {!conversationRef.current ? (
-            <button type="button" onClick={startInterview} disabled={status === 'connecting'} className="btnPrimary">
-              {status === 'connecting' ? 'Connecting...' : 'Initialize Session'}
-            </button>
-          ) : (
-            <button type="button" onClick={endInterview} className="btnDanger">
-              Terminate Session
-            </button>
-          )}
-
-          <button type="button" onClick={toggleMic} disabled={!conversationRef.current} className="talkButton">
-            {micOn ? 'Mic Live' : 'Activate Mic'}
+      <footer className="voiceFooter">
+        <div className="voiceControls">
+          <button type="button" className={micOn ? 'btnPrimary' : 'btnGhost'} onClick={toggleMic}>
+            {micOn ? 'Pause Microphone' : 'Enable Microphone'}
+          </button>
+          <button type="button" className="btnGhost" onClick={endInterview}>
+            Take a Break
           </button>
         </div>
 
-        {error && <p className="error">{error}</p>}
-        <p className="hint">
-          Best quality: use headphones and allow microphone access when prompted by the browser.
-        </p>
+        <section className="transcriptStrip" aria-live="polite">
+          {transcript.slice(-2).map((line) => (
+            <p key={line.id} className={line.source === 'user' ? 'lineUser' : 'lineAi'}>
+              <span>{line.source === 'user' ? 'You' : 'Agent'}</span> {line.message}
+            </p>
+          ))}
+        </section>
 
-        <details className="debugPanel" open>
-          <summary>Debug Timeline ({debugEvents.length})</summary>
-          <div className="debugList">
-            {debugEvents.length === 0 ? (
-              <p className="hint">No debug events yet.</p>
-            ) : (
-              debugEvents.map((item) => (
-                <p key={item.id} className="debugRow">
-                  <span className="debugTime">{item.timestamp}</span>
-                  <span className="debugLabel">{item.label}</span>
-                  {item.details && <span className="debugDetails">{item.details}</span>}
-                </p>
-              ))
-            )}
-          </div>
-        </details>
-      </section>
+        {error ? <p className="error">{error}</p> : null}
+      </footer>
     </main>
   )
 }

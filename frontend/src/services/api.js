@@ -29,6 +29,7 @@ export async function uploadPdf(file) {
   return payload
 }
 
+
 export async function getAgentById(agentId) {
   const response = await fetch(`${API_BASE_URL}/api/agent/${agentId}`)
   const payload = await readJson(response)
@@ -39,12 +40,28 @@ export async function getAgentById(agentId) {
 }
 
 export async function getAgentSignedUrl(agentId) {
-  const debugQuery = import.meta.env.DEV ? '?debug=1' : ''
-  const response = await fetch(`${API_BASE_URL}/api/agent/${agentId}/signed-url${debugQuery}`)
+  const response = await fetch(`${API_BASE_URL}/api/agent/${agentId}/signed-url`)
   const payload = await readJson(response)
   if (!response.ok) {
-    const details = payload.details ? ` | details: ${JSON.stringify(payload.details)}` : ''
-    throw new Error((payload.error || `Could not start voice session (${response.status})`) + details)
+    throw new Error(payload.error || `Could not start voice session (${response.status})`)
   }
   return payload.signed_url
+}
+
+export async function listDashboardSessions() {
+  const response = await fetch(`${API_BASE_URL}/api/admin/dashboard/sessions`)
+  const payload = await readJson(response)
+  if (!response.ok) {
+    throw new Error(payload.error || `Could not load dashboard sessions (${response.status})`)
+  }
+  return payload
+}
+
+export async function getDashboardSession(sessionId) {
+  const response = await fetch(`${API_BASE_URL}/api/admin/dashboard/sessions/${sessionId}`)
+  const payload = await readJson(response)
+  if (!response.ok) {
+    throw new Error(payload.error || `Could not load dashboard session (${response.status})`)
+  }
+  return payload
 }

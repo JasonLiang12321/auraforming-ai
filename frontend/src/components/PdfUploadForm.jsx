@@ -1,13 +1,69 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { uploadPdf } from '../services/api'
 
-export default function PdfUploadForm() {
+const LOADING_STEPS = ['Uploading your form...', 'Reviewing fillable fields...', 'Preparing your guided interview link...']
+
+export default function PdfUploadForm({ onCreated }) {
   const [file, setFile] = useState(null)
   const [loading, setLoading] = useState(false)
+  const [dragActive, setDragActive] = useState(false)
+  const [loadingStep, setLoadingStep] = useState(0)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const [copied, setCopied] = useState(false)
+  const inputRef = useRef(null)
   const widgetNames = result?.widgetNames || []
-  const shareHref = result?.share_url ? `${window.location.origin}${result.share_url}` : ''
+  const shareHref = useMemo(
+    () => (result?.share_url ? `${window.location.origin}${result.share_url}` : ''),
+    [result?.share_url],
+  )
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingStep(0)
+      return
+    }
+
+    const interval = setInterval(() => {
+      setLoadingStep((prev) => (prev + 1) % LOADING_STEPS.length)
+    }, 900)
+    return () => clearInterval(interval)
+  }, [loading])
+
+  useEffect(() => {
+    if (!copied) return
+    const timeout = setTimeout(() => setCopied(false), 1400)
+    return () => clearTimeout(timeout)
+  }, [copied])
+
+  const pickFile = () => inputRef.current?.click()
+
+  const applySelectedFile = (nextFile) => {
+    if (!nextFile) return
+    if (nextFile.type !== 'application/pdf' && !nextFile.name.toLowerCase().endsWith('.pdf')) {
+      setError('Only PDF files are supported.')
+      return
+    }
+    setError('')
+    setFile(nextFile)
+  }
+
+  const onDrop = (event) => {
+    event.preventDefault()
+    setDragActive(false)
+    const droppedFile = event.dataTransfer.files?.[0] || null
+    applySelectedFile(droppedFile)
+  }
+
+  const onCopy = async () => {
+    if (!shareHref) return
+    try {
+      await navigator.clipboard.writeText(shareHref)
+      setCopied(true)
+    } catch {
+      setError('Clipboard write failed. Copy manually from the link.')
+    }
+  }
 
   const onSubmit = async (event) => {
     event.preventDefault()
@@ -23,6 +79,7 @@ export default function PdfUploadForm() {
       setLoading(true)
       const data = await uploadPdf(file)
       setResult(data)
+      onCreated?.(data)
     } catch (err) {
       setError(err.message)
     } finally {
@@ -32,26 +89,46 @@ export default function PdfUploadForm() {
 
   return (
     <section className="card uploadCard">
-      <h2>Upload Blank PDF</h2>
-      <p>Drop in a fillable form and generate a ready-to-share interview link in one step.</p>
+      <h2>Create a Client Interview Link</h2>
+      <p>Drop a fillable PDF and we will prepare a warm, guided experience for your client.</p>
 
       <form onSubmit={onSubmit} className="uploadForm">
-        <input
-          type="file"
-          accept="application/pdf,.pdf"
-          className="fileInput"
-          onChange={(event) => setFile(event.target.files?.[0] || null)}
-        />
-        <button type="submit" disabled={loading} className="btnPrimary">
-          {loading ? 'Uploading...' : 'Upload PDF'}
+        <input ref={inputRef} type="file" accept="application/pdf,.pdf" hidden onChange={(event) => applySelectedFile(event.target.files?.[0] || null)} />
+        <div
+          role="button"
+          tabIndex={0}
+          className={dragActive ? 'dropZone active' : 'dropZone'}
+          onClick={pickFile}
+          onKeyDown={(event) => {
+            if (event.key === 'Enter' || event.key === ' ') {
+              event.preventDefault()
+              pickFile()
+            }
+          }}
+          onDragOver={(event) => {
+            event.preventDefault()
+            setDragActive(true)
+          }}
+          onDragLeave={(event) => {
+            event.preventDefault()
+            setDragActive(false)
+          }}
+          onDrop={onDrop}
+        >
+          <p className="dropZoneTitle">Drag and drop your blank PDF</p>
+          <p className="dropZoneHint">or click to browse files</p>
+          {file && <p className="dropZoneFile">{file.name}</p>}
+        </div>
+        <button type="submit" disabled={loading || !file} className="btnPrimary">
+          {loading ? 'Preparing...' : 'Generate Share Link'}
         </button>
       </form>
-      {file && <p className="hint">Selected file: {file.name}</p>}
+      {loading && <p className="loadingLine">{LOADING_STEPS[loadingStep]}</p>}
 
       {error && <p className="error">{error}</p>}
 
       {result && (
-        <div className="uploadResult">
+        <div className="uploadResult reveal">
           <div className="metricRow">
             <p>
               File <strong>{result.filename}</strong>
@@ -61,12 +138,18 @@ export default function PdfUploadForm() {
             </p>
           </div>
 
-          <p className="shareRow">
-            Share link{' '}
-            <a href={shareHref} target="_blank" rel="noreferrer">
-              {shareHref}
-            </a>
-          </p>
+          <div className="shareCard">
+            <div>
+              <p className="shareLabel">Shareable Client Link</p>
+              <a href={shareHref} target="_blank" rel="noreferrer">
+                {shareHref}
+              </a>
+            </div>
+            <button type="button" className="btnGhost" onClick={onCopy}>
+              Copy to Clipboard
+            </button>
+          </div>
+          {copied && <p className="toast">Copied!</p>}
 
           <p>
             Fields detected <strong>{result.fieldCount}</strong>
