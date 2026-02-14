@@ -4,11 +4,13 @@ import base64
 import os
 import uuid
 import re
+from urllib.parse import unquote
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 from flask import Blueprint, jsonify, request
 import requests
+import fitz
 
 from routes.gemini import GeminiAuthError, GeminiRateLimitError, GeminiRequestError, run_gemini_json
 from storage import get_agent
@@ -22,6 +24,7 @@ class InterviewSession:
     session_id: str
     agent_id: str
     missing_fields: list[str]
+    field_meta: dict[str, dict] = field(default_factory=dict)
     answers: dict[str, str] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -39,38 +42,245 @@ SESSIONS: dict[str, InterviewSession] = {}
 ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1"
 
 
-def _build_system_prompt(missing_fields: list[str]) -> str:
-    ordered_fields = json.dumps(missing_fields)
+def _normalize_for_match(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _fallback_label_from_key(field_key: str) -> str:
+    text = str(field_key).replace("_", " ").replace("\t", " ")
+    text = re.sub(r"([a-z])([A-Z])", r"\1 \2", text)
+    text = re.sub(r"([A-Za-z])(\d)", r"\1 \2", text)
+    text = re.sub(r"\s+", " ", text).strip()
+    if text.lower() in {"i full name", "i, full name"}:
+        return "Full name"
+    return text or str(field_key)
+
+
+def _decode_pdf_token(value: str) -> str:
+    if not value:
+        return ""
+    text = unquote(str(value))
+    text = re.sub(r"#([0-9A-Fa-f]{2})", lambda m: bytes.fromhex(m.group(1)).decode("latin1"), text)
+    return " ".join(text.split()).strip()
+
+
+def _clean_pdf_label(label: str, fallback: str) -> str:
+    text = _decode_pdf_token(label or "")
+    if not text:
+        text = _decode_pdf_token(fallback)
+    marker = "Type in the date or use the arrow keys to select a date."
+    if marker in text:
+        text = text.split(marker, 1)[0].strip()
+    text = text.rstrip(":;,. ").strip()
+    if text.lower() in {"i, full name", "i full name"}:
+        text = "Full name"
+    if text:
+        looks_key_like = bool(text) and all(sep not in text for sep in [" ", "/", "(", ")", ",", "-", ":"])
+        return _fallback_label_from_key(text) if looks_key_like else text
+    return _fallback_label_from_key(fallback)
+
+
+def _extract_widget_options(widget) -> list[str]:
+    options: list[str] = []
+    seen = set()
+
+    raw_choices = getattr(widget, "choice_values", None)
+    if callable(raw_choices):
+        raw_choices = raw_choices()
+    raw_choices = raw_choices or []
+    for choice in raw_choices:
+        item = _decode_pdf_token(str(choice))
+        if item and item.lower() != "off" and item not in seen:
+            seen.add(item)
+            options.append(item)
+
+    button_states = getattr(widget, "button_states", None)
+    if callable(button_states):
+        button_states = button_states()
+    button_states = button_states or {}
+    if not isinstance(button_states, dict):
+        button_states = {}
+    for state_values in button_states.values():
+        for value in state_values or []:
+            item = _decode_pdf_token(str(value))
+            if item and item.lower() != "off" and item not in seen:
+                seen.add(item)
+                options.append(item)
+
+    on_state = getattr(widget, "on_state", "")
+    if callable(on_state):
+        on_state = on_state()
+    on_state = _decode_pdf_token(str(on_state or ""))
+    if on_state and on_state.lower() != "off" and on_state not in seen:
+        options.append(on_state)
+
+    return options
+
+
+def _normalize_field_meta_item(item: dict) -> dict:
+    field_key = str(item.get("key", "")).strip()
+    label = str(item.get("label", "")).strip() or _fallback_label_from_key(field_key)
+    field_type = str(item.get("type", "Text")).strip() or "Text"
+    options = []
+    for option in item.get("options", []) if isinstance(item.get("options"), list) else []:
+        clean = str(option).strip()
+        if clean and clean not in options:
+            options.append(clean)
+
+    if field_type == "CheckBox" and not options:
+        options = ["Yes", "No"]
+
+    return {
+        "key": field_key,
+        "label": label,
+        "type": field_type,
+        "options": options,
+    }
+
+
+def _build_field_meta(schema: dict) -> dict[str, dict]:
+    fields_meta: dict[str, dict] = {}
+    interview_fields = schema.get("interview_fields", [])
+    if isinstance(interview_fields, list):
+        for item in interview_fields:
+            if not isinstance(item, dict):
+                continue
+            normalized = _normalize_field_meta_item(item)
+            key = normalized.get("key", "")
+            if key and key not in fields_meta:
+                fields_meta[key] = normalized
+
+    if fields_meta:
+        return fields_meta
+
+    # Backward-compatible fallback for agents saved before interview_fields metadata existed.
+    for raw in schema.get("widget_names", []) if isinstance(schema.get("widget_names"), list) else []:
+        key = str(raw).strip()
+        if key and key not in fields_meta:
+            fields_meta[key] = {
+                "key": key,
+                "label": _fallback_label_from_key(key),
+                "type": "Text",
+                "options": [],
+            }
+    return fields_meta
+
+
+def _build_field_meta_from_pdf(pdf_path: str) -> dict[str, dict]:
+    fields_meta: dict[str, dict] = {}
+    if not pdf_path or not os.path.exists(pdf_path):
+        return fields_meta
+
+    try:
+        with fitz.open(pdf_path) as document:
+            for page in document:
+                for widget in page.widgets() or []:
+                    key = str(getattr(widget, "field_name", "") or "").strip()
+                    if not key:
+                        continue
+
+                    field_type = str(getattr(widget, "field_type_string", "Text") or "Text").strip() or "Text"
+                    label = _clean_pdf_label(str(getattr(widget, "field_label", "") or ""), key)
+                    options = _extract_widget_options(widget)
+
+                    item = fields_meta.get(key)
+                    if not item:
+                        item = {
+                            "key": key,
+                            "label": label,
+                            "type": field_type,
+                            "options": [],
+                        }
+                        fields_meta[key] = item
+                    elif not item.get("label") and label:
+                        item["label"] = label
+
+                    existing_options = set(item.get("options", []))
+                    for option in options:
+                        if option not in existing_options:
+                            item["options"].append(option)
+                            existing_options.add(option)
+
+        for item in fields_meta.values():
+            if item.get("type") == "CheckBox" and not item.get("options"):
+                item["options"] = ["Yes", "No"]
+    except Exception as exc:
+        logger.warning("Could not rebuild interview field metadata from PDF: %s", exc)
+        return {}
+
+    return fields_meta
+
+
+def _field_meta_for(session: InterviewSession, field_key: str) -> dict:
+    fallback = {
+        "key": field_key,
+        "label": _fallback_label_from_key(field_key),
+        "type": "Text",
+        "options": [],
+    }
+    item = session.field_meta.get(field_key)
+    if not isinstance(item, dict):
+        return fallback
+    merged = {**fallback, **item}
+    if merged.get("type") == "CheckBox" and not merged.get("options"):
+        merged["options"] = ["Yes", "No"]
+    return merged
+
+
+def _build_field_question(field_meta: dict) -> str:
+    label = str(field_meta.get("label", "")).strip() or _fallback_label_from_key(str(field_meta.get("key", "")))
+    field_type = str(field_meta.get("type", "Text")).strip()
+    options = field_meta.get("options", []) if isinstance(field_meta.get("options"), list) else []
+
+    if field_type in {"ComboBox", "RadioButton"} and options:
+        options_text = ", ".join(options)
+        return f"For {label}, choose one option: {options_text}. What should I select?"
+    if field_type == "CheckBox":
+        return f"For {label}, should I mark yes or no?"
+    return f"What should I enter for {label}?"
+
+
+def _build_system_prompt(missing_fields: list[str], field_meta: dict[str, dict]) -> str:
+    ordered_fields = json.dumps(
+        [
+            {
+                "key": key,
+                "label": (field_meta.get(key) or {}).get("label", _fallback_label_from_key(key)),
+                "type": (field_meta.get(key) or {}).get("type", "Text"),
+                "options": (field_meta.get(key) or {}).get("options", []),
+            }
+            for key in missing_fields
+        ]
+    )
     return (
         "You are a voice assistant helping the user fill a form.\n"
         f"Required fields in strict order: {ordered_fields}\n"
         "Rules:\n"
         "1) Ask for exactly one missing field at a time, in order.\n"
-        "2) If answer is adequate, acknowledge and move to the next field.\n"
-        "3) If answer is unclear/incomplete, ask a concise clarification for that same field.\n"
-        "4) If user interrupts, briefly acknowledge and steer back to current field.\n"
-        "5) Never request fields outside the required list."
+        "2) Use only user-facing labels, never technical keys.\n"
+        "3) For ComboBox/RadioButton fields, ask user to choose one valid option.\n"
+        "4) For CheckBox fields, ask yes/no.\n"
+        "5) If answer is adequate, acknowledge and move to the next field.\n"
+        "6) If answer is unclear/incomplete, ask a concise clarification for that same field.\n"
+        "7) If user interrupts, briefly acknowledge and steer back to current field.\n"
+        "8) Never request fields outside the required list."
     )
 
 
-def _build_first_prompt(first_field: str) -> str:
+def _build_first_prompt(first_field_meta: dict) -> str:
     return (
         "Hi there. I will help you complete this form one step at a time. "
-        f"Let's start with {first_field}. What should I enter?"
+        + _build_field_question(first_field_meta)
     )
 
 
-def _build_next_field_prompt(next_field: str) -> str:
-    return f"Next, what should I enter for {next_field}?"
+def _build_next_field_prompt(next_field_meta: dict) -> str:
+    return "Next, " + _build_field_question(next_field_meta)
 
 
-def _normalize_for_match(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
-
-
-def _mentions_next_field(text: str, next_field: str) -> bool:
+def _mentions_field_label(text: str, field_label: str) -> bool:
     normalized_text = _normalize_for_match(text)
-    normalized_field = _normalize_for_match(next_field)
+    normalized_field = _normalize_for_match(field_label)
     if not normalized_text or not normalized_field:
         return False
     if normalized_field in normalized_text:
@@ -82,12 +292,13 @@ def _mentions_next_field(text: str, next_field: str) -> bool:
     return overlap >= max(2, min(3, len(field_tokens)))
 
 
-def _ensure_next_question(*, assistant_response: str, next_field: str) -> str:
+def _ensure_next_question(*, assistant_response: str, next_field_meta: dict) -> str:
     response = assistant_response.strip()
-    next_prompt = _build_next_field_prompt(next_field)
+    next_prompt = _build_next_field_prompt(next_field_meta)
+    next_label = str(next_field_meta.get("label", "")).strip()
     if not response:
         return next_prompt
-    if "?" in response or _mentions_next_field(response, next_field):
+    if "?" in response or _mentions_field_label(response, next_label):
         return response
     clean = response.rstrip()
     if clean and clean[-1] not in ".!?":
@@ -95,18 +306,96 @@ def _ensure_next_question(*, assistant_response: str, next_field: str) -> str:
     return f"{clean} {next_prompt}".strip()
 
 
+def _coerce_checkbox_value(value: str) -> str:
+    normalized = _normalize_for_match(value)
+    yes_tokens = {"yes", "y", "true", "checked", "check", "mark yes", "affirmative", "consent"}
+    no_tokens = {"no", "n", "false", "unchecked", "uncheck", "mark no", "decline", "do not consent"}
+    if normalized in yes_tokens:
+        return "Yes"
+    if normalized in no_tokens:
+        return "No"
+    if " not " in f" {normalized} " and "consent" in normalized:
+        return "No"
+    if "consent" in normalized:
+        return "Yes"
+    return ""
+
+
+def _map_value_to_allowed_option(value: str, options: list[str]) -> str:
+    if not options:
+        return value.strip()
+    raw = value.strip()
+    if not raw:
+        return ""
+    if raw in options:
+        return raw
+
+    normalized_raw = _normalize_for_match(raw)
+    normalized_options = {option: _normalize_for_match(option) for option in options}
+
+    for option, normalized_option in normalized_options.items():
+        if normalized_raw == normalized_option:
+            return option
+
+    for option, normalized_option in normalized_options.items():
+        if normalized_raw and normalized_raw in normalized_option:
+            return option
+        if normalized_option and normalized_option in normalized_raw:
+            return option
+
+    return ""
+
+
+def _coerce_value_for_field(field_meta: dict, value: str) -> str:
+    field_type = str(field_meta.get("type", "Text"))
+    options = field_meta.get("options", []) if isinstance(field_meta.get("options"), list) else []
+    if field_type == "CheckBox":
+        checkbox_value = _coerce_checkbox_value(value)
+        if checkbox_value:
+            if checkbox_value in options:
+                return checkbox_value
+            # Keep semantic yes/no even when PDF uses widget values like "On".
+            return checkbox_value
+        if not options:
+            return ""
+        mapped = _map_value_to_allowed_option(value, options)
+        return mapped
+    if field_type in {"ComboBox", "RadioButton"}:
+        return _map_value_to_allowed_option(value, options)
+    return value.strip()
+
+
 def _evaluate_turn_with_gemini(
     *,
     current_field: str,
+    current_field_meta: dict,
+    next_field_meta: dict | None,
     user_input: str,
-    missing_fields: list[str],
+    missing_fields: list[dict],
     answers: dict[str, str],
     was_interruption: bool,
 ) -> dict:
+    current_label = str(current_field_meta.get("label", "")).strip() or _fallback_label_from_key(current_field)
+    current_type = str(current_field_meta.get("type", "Text")).strip() or "Text"
+    current_options = current_field_meta.get("options", []) if isinstance(current_field_meta.get("options"), list) else []
+    next_label = ""
+    next_type = ""
+    next_options: list[str] = []
+    if isinstance(next_field_meta, dict):
+        next_label = str(next_field_meta.get("label", "")).strip()
+        next_type = str(next_field_meta.get("type", "")).strip()
+        next_options = next_field_meta.get("options", []) if isinstance(next_field_meta.get("options"), list) else []
+
     prompt = f"""
 You are validating one turn in a voice form interview.
 
-Current field (evaluate only this field): "{current_field}"
+Current field technical key (internal only): "{current_field}"
+Current field label (speak this): "{current_label}"
+Current field type: "{current_type}"
+Current field allowed options (if any): {json.dumps(current_options)}
+Next field label (if current is accepted): "{next_label}"
+Next field type (if current is accepted): "{next_type}"
+Next field allowed options (if any): {json.dumps(next_options)}
 Remaining fields in order: {json.dumps(missing_fields)}
 Already collected answers: {json.dumps(answers)}
 User transcript: "{user_input}"
@@ -121,10 +410,17 @@ Return STRICT JSON:
 }}
 
 Rules:
-- Mark as adequate ONLY when user clearly provided the value for the current field.
+- Mark as adequate ONLY when user clearly provided the value for the current field label.
+- Never speak or repeat the technical key; always use the label.
+- For ComboBox/RadioButton fields with options, normalized_value must be one of the allowed options exactly.
+- For CheckBox fields, normalized_value must be "Yes" or "No" unless a different allowed option is listed.
 - If unclear, off-topic, partial, or ambiguous, mark inadequate and ask clarification.
 - If interruption/side question, use intent "barge_in", acknowledge briefly, then return to current field.
-- If answer is adequate and there is another remaining field, assistant_response must ask for that next field in the same response.
+- If answer is adequate:
+  - assistant_response must confirm the captured value for the CURRENT field label.
+  - if Next field label is non-empty, assistant_response must also ask that next field in the same response.
+  - if next field type is ComboBox/RadioButton and options exist, assistant_response must list those options in the question.
+  - do not output very short fragments; never output just the field name or "X?".
 - Never ask for multiple fields at once.
 - Never invent field names.
 """.strip()
@@ -176,6 +472,12 @@ def _evaluate_and_update_session(
     current_field = session.current_field
     if not current_field:
         raise RuntimeError("No active field in session.")
+    current_field_meta = _field_meta_for(session, current_field)
+    current_label = str(current_field_meta.get("label", "")).strip() or _fallback_label_from_key(current_field)
+    next_field_meta = None
+    if len(session.missing_fields) > 1:
+        next_field_key = session.missing_fields[1]
+        next_field_meta = _field_meta_for(session, next_field_key)
 
     logger.info(
         "Interview turn received agent_id=%s session_id=%s current_field=%s interruption=%s user_input=%s",
@@ -188,16 +490,30 @@ def _evaluate_and_update_session(
 
     evaluation = _evaluate_turn_with_gemini(
         current_field=current_field,
+        current_field_meta=current_field_meta,
+        next_field_meta=next_field_meta,
         user_input=user_input,
-        missing_fields=session.missing_fields,
+        missing_fields=[
+            {
+                "key": key,
+                "label": _field_meta_for(session, key).get("label", _fallback_label_from_key(key)),
+                "type": _field_meta_for(session, key).get("type", "Text"),
+                "options": _field_meta_for(session, key).get("options", []),
+            }
+            for key in session.missing_fields
+        ],
         answers=session.answers,
         was_interruption=was_interruption,
     )
 
     intent = str(evaluation.get("intent", "clarification"))
     is_answer_adequate = bool(evaluation.get("is_answer_adequate", False))
-    normalized_value = str(evaluation.get("normalized_value", "")).strip()
+    raw_normalized_value = str(evaluation.get("normalized_value", "")).strip()
+    normalized_value = _coerce_value_for_field(current_field_meta, raw_normalized_value)
     assistant_response = str(evaluation.get("assistant_response", "")).strip()
+
+    if is_answer_adequate and not normalized_value:
+        is_answer_adequate = False
 
     if is_answer_adequate and normalized_value:
         session.answers[current_field] = normalized_value
@@ -208,17 +524,15 @@ def _evaluate_and_update_session(
             assistant_response = assistant_response or "Thanks. We have all missing fields now."
         else:
             next_field = session.current_field or "the next field"
-            assistant_response = _ensure_next_question(
-                assistant_response=assistant_response,
-                next_field=next_field,
-            )
+            next_field_meta = _field_meta_for(session, next_field)
+            assistant_response = assistant_response or _build_next_field_prompt(next_field_meta)
     else:
         session.updated_at = datetime.now(timezone.utc).isoformat()
         if not assistant_response:
             if intent == "barge_in":
-                assistant_response = f"Got it. Let's continue with {current_field}."
+                assistant_response = f"Got it. Let's continue. {_build_field_question(current_field_meta)}"
             else:
-                assistant_response = f"I still need {current_field}. Could you clarify that?"
+                assistant_response = f"I still need {current_label}. {_build_field_question(current_field_meta)}"
 
     logger.info(
         "Interview turn evaluated agent_id=%s session_id=%s intent=%s adequate=%s completed=%s next_field=%s",
@@ -308,19 +622,29 @@ def start_interview(agent_id: str) -> tuple:
     if not agent:
         return jsonify({"error": "Agent not found."}), 404
 
-    fields = agent.get("schema", {}).get("widget_names", [])
-    if not isinstance(fields, list) or not fields:
+    schema = agent.get("schema", {}) if isinstance(agent.get("schema"), dict) else {}
+    has_interview_fields = isinstance(schema.get("interview_fields"), list) and bool(schema.get("interview_fields"))
+    field_meta = _build_field_meta(schema)
+    if not has_interview_fields:
+        rebuilt_meta = _build_field_meta_from_pdf(str(agent.get("pdf_path", "") or ""))
+        if rebuilt_meta:
+            field_meta = rebuilt_meta
+    if not field_meta:
         return jsonify({"error": "Agent has no fields to interview."}), 400
 
-    normalized_fields = [str(item).strip() for item in fields if str(item).strip()]
-    if not normalized_fields:
-        return jsonify({"error": "Agent has no valid fields to interview."}), 400
+    normalized_fields = [key for key in field_meta.keys() if str(key).strip()]
 
     session_id = uuid.uuid4().hex[:12]
-    session = InterviewSession(session_id=session_id, agent_id=agent_id, missing_fields=normalized_fields)
+    session = InterviewSession(
+        session_id=session_id,
+        agent_id=agent_id,
+        missing_fields=normalized_fields,
+        field_meta=field_meta,
+    )
     SESSIONS[session_id] = session
 
     first_field = session.current_field or "the first field"
+    first_field_meta = _field_meta_for(session, first_field)
     return (
         jsonify(
             {
@@ -330,8 +654,8 @@ def start_interview(agent_id: str) -> tuple:
                 "missing_fields": session.missing_fields,
                 "answers": session.answers,
                 "completed": session.completed,
-                "system_prompt": _build_system_prompt(session.missing_fields),
-                "first_prompt": _build_first_prompt(first_field),
+                "system_prompt": _build_system_prompt(session.missing_fields, session.field_meta),
+                "first_prompt": _build_first_prompt(first_field_meta),
             }
         ),
         200,
