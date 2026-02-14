@@ -6,6 +6,7 @@ export default function PdfUploadForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
+  const widgetNames = result?.widgetNames || []
 
   const onSubmit = async (event) => {
     event.preventDefault()
@@ -31,7 +32,7 @@ export default function PdfUploadForm() {
   return (
     <section className="card">
       <h2>Upload Blank PDF</h2>
-      <p>Extract fillable variable names from a PDF form.</p>
+      <p>Create an agent by extracting technical widget names from a blank PDF.</p>
 
       <form onSubmit={onSubmit} className="uploadForm">
         <input
@@ -52,11 +53,17 @@ export default function PdfUploadForm() {
             <strong>File:</strong> {result.filename}
           </p>
           <p>
+            <strong>Agent ID:</strong> {result.agent_id}
+          </p>
+          <p>
+            <strong>Share URL:</strong> {result.share_url}
+          </p>
+          <p>
             <strong>Fields found:</strong> {result.fieldCount}
           </p>
-          {result.fieldNames.length > 0 ? (
+          {widgetNames.length > 0 ? (
             <ul>
-              {result.fieldNames.map((name) => (
+              {widgetNames.map((name) => (
                 <li key={name}>{name}</li>
               ))}
             </ul>
