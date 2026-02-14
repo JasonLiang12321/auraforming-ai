@@ -3,6 +3,7 @@ import logging
 import base64
 import os
 import uuid
+import re
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
@@ -59,6 +60,41 @@ def _build_first_prompt(first_field: str) -> str:
     )
 
 
+def _build_next_field_prompt(next_field: str) -> str:
+    return f"Next, what should I enter for {next_field}?"
+
+
+def _normalize_for_match(text: str) -> str:
+    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+
+
+def _mentions_next_field(text: str, next_field: str) -> bool:
+    normalized_text = _normalize_for_match(text)
+    normalized_field = _normalize_for_match(next_field)
+    if not normalized_text or not normalized_field:
+        return False
+    if normalized_field in normalized_text:
+        return True
+    field_tokens = [token for token in normalized_field.split() if len(token) > 2]
+    if not field_tokens:
+        return False
+    overlap = sum(1 for token in field_tokens if token in normalized_text)
+    return overlap >= max(2, min(3, len(field_tokens)))
+
+
+def _ensure_next_question(*, assistant_response: str, next_field: str) -> str:
+    response = assistant_response.strip()
+    next_prompt = _build_next_field_prompt(next_field)
+    if not response:
+        return next_prompt
+    if "?" in response or _mentions_next_field(response, next_field):
+        return response
+    clean = response.rstrip()
+    if clean and clean[-1] not in ".!?":
+        clean = f"{clean}."
+    return f"{clean} {next_prompt}".strip()
+
+
 def _evaluate_turn_with_gemini(
     *,
     current_field: str,
@@ -88,6 +124,7 @@ Rules:
 - Mark as adequate ONLY when user clearly provided the value for the current field.
 - If unclear, off-topic, partial, or ambiguous, mark inadequate and ask clarification.
 - If interruption/side question, use intent "barge_in", acknowledge briefly, then return to current field.
+- If answer is adequate and there is another remaining field, assistant_response must ask for that next field in the same response.
 - Never ask for multiple fields at once.
 - Never invent field names.
 """.strip()
@@ -171,7 +208,10 @@ def _evaluate_and_update_session(
             assistant_response = assistant_response or "Thanks. We have all missing fields now."
         else:
             next_field = session.current_field or "the next field"
-            assistant_response = assistant_response or f"Great, now let's do {next_field}."
+            assistant_response = _ensure_next_question(
+                assistant_response=assistant_response,
+                next_field=next_field,
+            )
     else:
         session.updated_at = datetime.now(timezone.utc).isoformat()
         if not assistant_response:
