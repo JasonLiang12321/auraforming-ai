@@ -209,7 +209,6 @@ export default function LandingPage() {
                 <button type="button" className="beginButton" onClick={goToIntent}>
                   Begin
                 </button>
-                <p className="beginHint">Start your guided flow</p>
               </div>
             </div>
           ) : null}
