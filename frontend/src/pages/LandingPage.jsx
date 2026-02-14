@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { getAgentById } from '../services/api'
 
 function BusinessIcon() {
   return (
@@ -37,11 +38,11 @@ export default function LandingPage() {
   const [introPhase, setIntroPhase] = useState('intro')
   const [codeChars, setCodeChars] = useState(Array.from({ length: CODE_LENGTH }, () => ''))
   const [clientError, setClientError] = useState('')
+  const [clientStatus, setClientStatus] = useState('idle')
   const inputRefs = useRef([])
+  const validationSeqRef = useRef(0)
 
-  const joinedCode = useMemo(() => codeChars.join(''), [codeChars])
-
-  const parseAgentIdInput = (value) => {
+  function parseAgentIdInput(value) {
     const trimmed = value.trim()
     if (!trimmed) return ''
 
@@ -61,6 +62,8 @@ export default function LandingPage() {
     return trimmed
   }
 
+  const joinedCode = useMemo(() => codeChars.join(''), [codeChars])
+
   useEffect(() => {
     const dockTimer = window.setTimeout(() => setIntroPhase('dock'), 1400)
     const readyTimer = window.setTimeout(() => setIntroPhase('ready'), 2350)
@@ -78,11 +81,43 @@ export default function LandingPage() {
     inputRefs.current[focusIndex]?.focus()
   }, [CODE_LENGTH, codeChars, stage])
 
-  const connectWithCode = (chars) => {
-    const code = chars.join('').trim()
-    if (code.length !== CODE_LENGTH) return
+  useEffect(() => {
+    if (stage !== 'client') return
+    if (joinedCode.length !== CODE_LENGTH) {
+      setClientStatus('idle')
+      return
+    }
+
+    let cancelled = false
+    const seq = validationSeqRef.current + 1
+    validationSeqRef.current = seq
+    setClientStatus('checking')
     setClientError('')
-    navigate(`/agent/${encodeURIComponent(code)}?autostart=1`)
+
+    const validate = async () => {
+      try {
+        await getAgentById(joinedCode)
+        if (cancelled || validationSeqRef.current !== seq) return
+        setClientStatus('valid')
+      } catch {
+        if (cancelled || validationSeqRef.current !== seq) return
+        setClientStatus('invalid')
+        setClientError('Invalid code')
+      }
+    }
+
+    void validate()
+    return () => {
+      cancelled = true
+    }
+  }, [CODE_LENGTH, joinedCode, stage])
+
+  const continueWithCode = () => {
+    if (clientStatus !== 'valid') {
+      setClientError('Invalid code')
+      return
+    }
+    navigate(`/agent/${encodeURIComponent(joinedCode)}?autostart=1`)
   }
 
   const setSingleChar = (index, rawValue) => {
@@ -93,6 +128,8 @@ export default function LandingPage() {
         next[index] = ''
         return next
       })
+      setClientError('')
+      setClientStatus('idle')
       return
     }
 
@@ -103,13 +140,13 @@ export default function LandingPage() {
           next[index + i] = cleaned[i]
         }
         const nextEmpty = next.findIndex((char) => !char)
-        if (nextEmpty === -1) {
-          connectWithCode(next)
-        } else {
+        if (nextEmpty !== -1) {
           inputRefs.current[nextEmpty]?.focus()
         }
         return next
       })
+      setClientError('')
+      setClientStatus('idle')
       return
     }
 
@@ -119,11 +156,10 @@ export default function LandingPage() {
       if (index < CODE_LENGTH - 1) {
         inputRefs.current[index + 1]?.focus()
       }
-      if (next.every(Boolean)) {
-        connectWithCode(next)
-      }
       return next
     })
+    setClientError('')
+    setClientStatus('idle')
   }
 
   const handleKeyDown = (index, event) => {
@@ -146,15 +182,15 @@ export default function LandingPage() {
     const pasted = parsed.replace(/[^A-Za-z0-9_-]/g, '').slice(0, CODE_LENGTH)
 
     if (!pasted) {
-      setClientError('Use letters and numbers only.')
+      setClientError('Invalid code')
+      setClientStatus('invalid')
       return
     }
 
     const next = Array.from({ length: CODE_LENGTH }, (_, index) => pasted[index] || '')
     setCodeChars(next)
-    if (next.every(Boolean)) {
-      connectWithCode(next)
-    }
+    setClientError('')
+    setClientStatus('idle')
   }
 
   const goToIntent = () => setStage('intent')
@@ -162,6 +198,7 @@ export default function LandingPage() {
   const goToStepOne = () => {
     setClientError('')
     setCodeChars(Array.from({ length: CODE_LENGTH }, () => ''))
+    setClientStatus('idle')
     setStage('hero')
   }
 
@@ -170,6 +207,7 @@ export default function LandingPage() {
   const chooseClient = () => {
     setClientError('')
     setCodeChars(Array.from({ length: CODE_LENGTH }, () => ''))
+    setClientStatus('idle')
     setStage('client')
   }
 
@@ -199,9 +237,10 @@ export default function LandingPage() {
               <div className="simulationFrame" aria-hidden="true">
                 <div className="videoOrb"></div>
                 <div className="demoLines">
-                  <p>Client: &quot;What does indemnity mean here?&quot;</p>
-                  <p>Assistant: &quot;Let&apos;s practice that with a quick real-life example.&quot;</p>
-                  <p>Assistant: &quot;Great. Now we&apos;ll continue your form.&quot;</p>
+                  <p>Client: &quot;I&apos;m stuck. What does deductible mean?&quot;</p>
+                  <p>Assistant: &quot;No problem. It&apos;s what you pay first before coverage starts.&quot;</p>
+                  <p>Assistant: &quot;Quick check: if your deductible is $500 and damage is $900, what do you pay?&quot;</p>
+                  <p>Assistant: &quot;Perfect. Now let&apos;s continue with your next field.&quot;</p>
                 </div>
               </div>
 
@@ -209,14 +248,12 @@ export default function LandingPage() {
                 <button type="button" className="beginButton" onClick={goToIntent}>
                   Begin
                 </button>
-                <p className="beginHint">Start your guided flow</p>
               </div>
             </div>
           ) : null}
 
           {stage === 'intent' ? (
             <div className="landingStage intentStage">
-              <p className="eyebrow">Step 2</p>
               <h2 className="intentTitle">How can we help you today?</h2>
 
               <div className="gatewayCards">
@@ -240,8 +277,7 @@ export default function LandingPage() {
               <button type="button" className="gatewayBack" onClick={() => setStage('intent')}>
                 Back
               </button>
-              <p className="eyebrow">Step 3</p>
-              <h2 className="intentTitle">Please enter your unique Form ID.</h2>
+              <h2 className="intentTitle">Enter your 8-character Form ID.</h2>
 
               <div className="idEntryRow" onPaste={handlePaste}>
                 {codeChars.map((char, index) => (
@@ -262,9 +298,11 @@ export default function LandingPage() {
                 ))}
               </div>
 
-              <p className="clientHint">Type or paste your 8-character code. We&apos;ll connect automatically.</p>
-              {clientError ? <p className="error">{clientError}</p> : null}
-              <p className="idPreview">{joinedCode ? `Current code: ${joinedCode}` : 'Waiting for code...'}</p>
+              <button type="button" className="btnGhost continueButtonSmall" onClick={continueWithCode} disabled={clientStatus !== 'valid'}>
+                Continue
+              </button>
+
+              <p className={clientError ? 'error clientErrorSlot visible' : 'error clientErrorSlot'}>{clientError || ' '}</p>
             </div>
           ) : null}
         </div>

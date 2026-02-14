@@ -577,6 +577,15 @@ code {
   font-family: 'JetBrains Mono', monospace;
 }
 
+.clientErrorSlot {
+  min-height: 1.4rem;
+  margin-top: 0.45rem;
+}
+
+.clientErrorSlot:not(.visible) {
+  visibility: hidden;
+}
+
 .landingValue {
   position: relative;
   z-index: 1;
@@ -615,15 +624,19 @@ code {
   margin: 0.42rem 0;
   color: #5a4a35;
   opacity: 0;
-  animation: lineCycle 6.2s ease-in-out infinite;
+  animation: lineCycle 8.2s ease-in-out infinite;
 }
 
 .demoLines p:nth-child(2) {
-  animation-delay: 1.8s;
+  animation-delay: 2s;
 }
 
 .demoLines p:nth-child(3) {
-  animation-delay: 3.6s;
+  animation-delay: 4s;
+}
+
+.demoLines p:nth-child(4) {
+  animation-delay: 6s;
 }
 
 .landingTitleSmall {
@@ -690,6 +703,31 @@ code {
   display: flex;
   flex-direction: column;
   gap: 0.75rem;
+}
+
+.inputLabel {
+  margin: 0;
+  color: #6b5a45;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-align: left;
+}
+
+.textInput {
+  width: 100%;
+  min-height: 2.8rem;
+  border-radius: 0.72rem;
+  border: 1px solid rgba(214, 185, 132, 0.52);
+  background: rgba(255, 252, 246, 0.96);
+  color: #3d2f1d;
+  font-size: 0.95rem;
+  padding: 0.58rem 0.72rem;
+}
+
+.textInput:focus {
+  outline: none;
+  border-color: rgba(201, 162, 105, 0.8);
+  box-shadow: 0 0 0 4px rgba(201, 162, 105, 0.2);
 }
 
 .dropZone {
@@ -782,6 +820,18 @@ button:disabled {
   border-color: var(--line-soft);
 }
 
+.continueButtonSmall {
+  margin-top: 0.65rem;
+  min-width: 170px;
+  min-height: 2.7rem;
+  padding: 0.62rem 1.2rem;
+  border-radius: 0.7rem;
+  font-size: 0.92rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+
 .btnLink {
   display: inline-flex;
   align-items: center;
@@ -814,12 +864,41 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.sharePrompt {
+  margin: 0.28rem 0 0;
+  color: #5e4a32;
+  font-weight: 500;
+}
+
 .shareLabel {
   margin: 0 0 0.2rem;
   color: var(--text-soft);
   font-size: 0.75rem;
   text-transform: uppercase;
   letter-spacing: 0.12em;
+}
+
+.shareHref {
+  color: #3b2a16;
+  font-weight: 700;
+  text-decoration: underline;
+  text-underline-offset: 0.18rem;
+  word-break: break-all;
+}
+
+.shareHref:hover {
+  color: #24170b;
+}
+
+.uploadSuccessHead h2 {
+  margin: 0.15rem 0 0;
+}
+
+.resultActions {
+  margin-top: 0.72rem;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
 }
 
 .toast {
@@ -840,6 +919,115 @@ button:disabled {
   margin: 0.2rem 0;
   color: #5c4a34;
   font-size: 0.9rem;
+}
+
+.agentsGrid {
+  margin-top: 0.85rem;
+  display: grid;
+  gap: 0.68rem;
+  grid-template-columns: 1fr;
+}
+
+.agentTile {
+  border: 1px solid var(--line-soft);
+  border-radius: 0.85rem;
+  padding: 0.72rem;
+  background: rgba(255, 252, 246, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+
+.agentTile:hover {
+  border-color: rgba(201, 162, 105, 0.5);
+  box-shadow: 0 12px 28px -18px rgba(108, 82, 47, 0.48);
+  transform: translateY(-1px);
+}
+
+.agentTile:focus-visible {
+  outline: 2px solid rgba(201, 162, 105, 0.65);
+  outline-offset: 2px;
+}
+
+.agentTile.active {
+  border-color: rgba(201, 162, 105, 0.72);
+  box-shadow: 0 14px 26px -20px rgba(108, 82, 47, 0.55);
+}
+
+.agentTileMain {
+  min-width: 0;
+  display: grid;
+  gap: 0.28rem;
+}
+
+.agentTileName {
+  margin: 0;
+  font-size: 0.98rem;
+  font-weight: 700;
+  color: #4e3a22;
+}
+
+.agentTileMeta {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.85rem;
+}
+
+.agentTileActions {
+  display: flex;
+  gap: 0.45rem;
+  align-items: center;
+}
+
+.btnDanger {
+  color: #7f1734;
+  background: rgba(255, 241, 245, 0.96);
+  border-color: rgba(244, 63, 94, 0.45);
+}
+
+.iconBtn {
+  width: 2.1rem;
+  height: 2.1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #5f4a2f;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+
+.iconBtn:hover {
+  border-color: rgba(201, 162, 105, 0.62);
+  background: rgba(255, 248, 233, 0.98);
+  transform: translateY(-1px);
+}
+
+.iconBtn svg {
+  width: 1rem;
+  height: 1rem;
+  fill: currentColor;
+}
+
+.iconBtn.danger {
+  color: #7f1734;
+  border-color: rgba(244, 63, 94, 0.45);
+  background: rgba(255, 241, 245, 0.96);
+}
+
+.iconBtn.danger:hover {
+  border-color: rgba(225, 29, 72, 0.62);
+  background: rgba(255, 232, 240, 0.96);
+}
+
+.refreshBtn {
+  flex-shrink: 0;
 }
 
 .tableCard {
@@ -996,15 +1184,121 @@ button:disabled {
   box-shadow: 0 42px 80px -56px rgba(108, 82, 47, 0.48);
 }
 
+.gateCardOpen {
+  width: 100%;
+  min-height: calc(100vh - 2.4rem);
+  max-width: none;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.gateShellWelcome {
+  padding: 1.2rem;
+}
+
+.gateTopRow {
+  width: 100%;
+}
+
+.gateBrandRow {
+  width: 100%;
+  max-width: 1260px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.agentGateBrand {
+  color: #3d2f1d;
+  font-family: 'Orbitron', 'Inter', sans-serif;
+  font-size: clamp(1.05rem, 2.4vw, 1.4rem);
+  text-decoration: none;
+}
+
+.backLandingLink {
+  color: #7e6f5a;
+  text-decoration: underline;
+  text-underline-offset: 0.2rem;
+  font-size: 0.88rem;
+}
+
+.backLandingLink:hover {
+  color: #5b4126;
+}
+
 .gateCard h1 {
   margin: 0.5rem 0 0.65rem;
   font-size: clamp(1.7rem, 4vw, 2.5rem);
   line-height: 1.06;
 }
 
+.gateHero {
+  flex: 1;
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  display: grid;
+  align-content: center;
+  justify-items: stretch;
+  text-align: center;
+  gap: 0.35rem;
+  padding: clamp(2rem, 8vh, 5.25rem) 0 clamp(2rem, 8vh, 4.6rem);
+}
+
+.gateTitleRow {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.95rem;
+  flex-wrap: wrap;
+}
+
+.gateFormTitle {
+  margin: 0;
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(2.1rem, 6.2vw, 4.2rem);
+  line-height: 1;
+  letter-spacing: -0.02em;
+  font-weight: 800;
+  color: #382816;
+}
+
+.gateFormToken {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 1.85rem;
+  padding: 0.28rem 0.7rem;
+  border-radius: 999px;
+  border: 1px solid rgba(176, 138, 77, 0.54);
+  background: linear-gradient(135deg, rgba(255, 246, 229, 0.96), rgba(244, 229, 201, 0.92));
+  color: #5b4528;
+  font-family: 'Inter', sans-serif;
+  font-size: clamp(0.72rem, 1.25vw, 0.86rem);
+  letter-spacing: 0.05em;
+  font-weight: 700;
+}
+
+.gateHeroText {
+  margin: 0.2rem auto 0;
+  max-width: 56ch;
+}
+
 .startPulseButton {
-  margin-top: 1rem;
-  min-width: 200px;
+  margin: 1.1rem auto 0;
+  min-width: clamp(260px, 34vw, 360px);
+  min-height: 3.5rem;
+  border-radius: 999px;
+  font-size: 1.08rem;
+  font-weight: 700;
+  letter-spacing: 0.01em;
   color: #251708;
   background: linear-gradient(135deg, var(--accent), var(--accent-2));
   border: 1px solid rgba(222, 192, 143, 0.65);
@@ -1055,6 +1349,30 @@ button:disabled {
   color: #8a5d12;
   border-color: rgba(245, 158, 11, 0.6);
   background: rgba(245, 158, 11, 0.16);
+}
+
+.statusPill.recording {
+  color: #9f1239;
+  border-color: rgba(244, 63, 94, 0.62);
+  background: rgba(244, 63, 94, 0.16);
+}
+
+.statusPill.processing {
+  color: #5b4530;
+  border-color: rgba(176, 138, 77, 0.7);
+  background: rgba(176, 138, 77, 0.2);
+}
+
+.statusPill.speaking {
+  color: #5a3f18;
+  border-color: rgba(234, 179, 8, 0.6);
+  background: rgba(234, 179, 8, 0.16);
+}
+
+.statusPill.error {
+  color: #9f1239;
+  border-color: rgba(244, 63, 94, 0.64);
+  background: rgba(244, 63, 94, 0.14);
 }
 
 .orbStage {
@@ -1146,6 +1464,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 0.8rem;
+  align-items: center;
 }
 
 .voiceControls {
@@ -1154,6 +1473,110 @@ button:disabled {
   justify-content: center;
   gap: 0.66rem;
   flex-wrap: wrap;
+}
+
+.micStack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.66rem;
+}
+
+.micHoldButton {
+  width: 5.4rem;
+  height: 5.4rem;
+  border-radius: 50%;
+  border: 2px solid rgba(176, 138, 77, 0.72);
+  background: rgba(255, 248, 238, 0.86);
+  box-shadow: none;
+  color: #5b4126;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  transition: transform 120ms ease, border-color 180ms ease, background 180ms ease, filter 180ms ease;
+}
+
+.micHoldButton:hover {
+  border-color: rgba(156, 120, 66, 0.84);
+}
+
+.micHoldButton:active,
+.micHoldButton.active {
+  transform: scale(0.98);
+  border-color: rgba(192, 64, 95, 0.78);
+  background: rgba(255, 242, 236, 0.96);
+}
+
+.micHoldButton:disabled {
+  cursor: not-allowed;
+  filter: grayscale(0.24);
+  opacity: 0.72;
+  transform: none;
+}
+
+.micGlyph {
+  width: 2rem;
+  height: 2rem;
+  fill: currentColor;
+}
+
+.micHint {
+  margin: 0;
+  color: var(--text-soft);
+  font-size: 0.92rem;
+}
+
+.endSessionTextButton {
+  border: none;
+  background: transparent;
+  color: #6f5c45;
+  text-decoration: underline;
+  text-decoration-color: rgba(176, 138, 77, 0.6);
+  text-underline-offset: 0.2rem;
+  cursor: pointer;
+  font-size: 1rem;
+  font-weight: 600;
+  padding: 0.2rem 0.3rem;
+}
+
+.endSessionTextButton:hover {
+  color: #6e5133;
+}
+
+.confirmOverlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(30, 22, 14, 0.35);
+  display: grid;
+  place-items: center;
+  padding: 1rem;
+  z-index: 60;
+}
+
+.confirmDialog {
+  width: min(460px, 100%);
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: linear-gradient(145deg, rgba(255, 250, 242, 0.98), rgba(248, 240, 228, 0.98));
+  box-shadow: 0 30px 56px -34px rgba(61, 42, 19, 0.55);
+  padding: 1.1rem;
+}
+
+.confirmDialog h3 {
+  margin: 0.35rem 0 0.4rem;
+  font-size: 1.35rem;
+}
+
+.confirmDialog p {
+  margin: 0;
+  color: var(--text-soft);
+}
+
+.confirmActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.55rem;
+  margin-top: 1rem;
 }
 
 .transcriptStrip {
@@ -1455,5 +1878,28 @@ button:disabled {
 
   .agentShell {
     padding: 1rem;
+  }
+
+  .gateShellWelcome {
+    padding: 1rem;
+  }
+
+  .gateHero {
+    padding: 1.6rem 0 2.2rem;
+  }
+
+  .gateBrandRow {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 0.35rem;
+  }
+
+  .gateTitleRow {
+    gap: 0.6rem;
+  }
+
+  .gateFormToken {
+    font-size: 0.82rem;
+    letter-spacing: 0.08em;
   }
 }

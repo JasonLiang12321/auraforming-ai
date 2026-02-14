@@ -31,13 +31,13 @@ function SessionModal({ sessionId, onClose }) {
     <div className="modalBackdrop" onClick={onClose}>
       <section className="sessionModal" onClick={(event) => event.stopPropagation()}>
         <div className="modalHeader">
-          <h2>Session {sessionId}</h2>
+          <h2>Intake {sessionId}</h2>
           <button type="button" className="btnGhost" onClick={onClose}>
             Close
           </button>
         </div>
 
-        {loading && <p className="hint">Loading session details...</p>}
+        {loading && <p className="hint">Loading intake details...</p>}
         {error && <p className="error">{error}</p>}
 
         {session && (
@@ -83,30 +83,32 @@ export default function AdminDashboardPage() {
     void loadSessions()
   }, [])
 
-  const countLabel = useMemo(() => `${sessions.length} completed session${sessions.length === 1 ? '' : 's'}`, [sessions.length])
+  const countLabel = useMemo(() => `${sessions.length} completed intake${sessions.length === 1 ? '' : 's'}`, [sessions.length])
 
   return (
     <main className="pageShell">
       <PortalHeader />
       <section className="hero">
-        <p className="eyebrow">Client Sessions</p>
-        <h1>Completed Conversations</h1>
-        <p className="heroText">Open any session to review the captured data and the completed form side by side.</p>
+        <p className="eyebrow">BUSINESS PORTAL</p>
+        <h1>Completed Intakes</h1>
+        <p className="heroText">Open any intake to review the captured data and the completed form side by side.</p>
       </section>
 
       <section className="card tableCard">
         <div className="tableHeader">
           <p className="paneLabel">{countLabel}</p>
-          <button type="button" className="btnGhost" onClick={loadSessions}>
-            Refresh
+          <button type="button" className="iconBtn refreshBtn" onClick={loadSessions} aria-label="Refresh intakes" title="Refresh">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4.5 12a7.5 7.5 0 0112.2-5.8l.65.54H15a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75V3a.75.75 0 00-1.5 0v2.04l-.58-.48A9 9 0 1021 12a.75.75 0 00-1.5 0 7.5 7.5 0 11-15 0z" />
+            </svg>
           </button>
         </div>
 
-        {loading ? <p className="hint">Loading sessions...</p> : null}
+        {loading ? <p className="hint">Loading intakes...</p> : null}
         {error ? <p className="error">{error}</p> : null}
 
         {!loading && sessions.length === 0 ? (
-          <p className="hint">No completed sessions yet. Finish an interview from an agent link first.</p>
+          <p className="hint">No completed intakes yet. Finish an interview from an agent link first.</p>
         ) : null}
 
         {sessions.length > 0 ? (

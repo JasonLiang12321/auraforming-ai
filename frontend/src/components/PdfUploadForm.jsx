@@ -5,6 +5,7 @@ const LOADING_STEPS = ['Uploading your form...', 'Reviewing fillable fields...',
 
 export default function PdfUploadForm({ onCreated }) {
   const [file, setFile] = useState(null)
+  const [agentName, setAgentName] = useState('')
   const [loading, setLoading] = useState(false)
   const [dragActive, setDragActive] = useState(false)
   const [loadingStep, setLoadingStep] = useState(0)
@@ -12,7 +13,6 @@ export default function PdfUploadForm({ onCreated }) {
   const [result, setResult] = useState(null)
   const [copied, setCopied] = useState(false)
   const inputRef = useRef(null)
-  const widgetNames = result?.widgetNames || []
   const shareHref = useMemo(
     () => (result?.share_url ? `${window.location.origin}${result.share_url}` : ''),
     [result?.share_url],
@@ -37,6 +37,12 @@ export default function PdfUploadForm({ onCreated }) {
   }, [copied])
 
   const pickFile = () => inputRef.current?.click()
+  const resetToCreateAnother = () => {
+    setResult(null)
+    setCopied(false)
+    setError('')
+    setFile(null)
+  }
 
   const applySelectedFile = (nextFile) => {
     if (!nextFile) return
@@ -46,6 +52,10 @@ export default function PdfUploadForm({ onCreated }) {
     }
     setError('')
     setFile(nextFile)
+    if (!agentName.trim()) {
+      const suggested = nextFile.name.replace(/\.pdf$/i, '').trim()
+      if (suggested) setAgentName(suggested)
+    }
   }
 
   const onDrop = (event) => {
@@ -77,7 +87,7 @@ export default function PdfUploadForm({ onCreated }) {
 
     try {
       setLoading(true)
-      const data = await uploadPdf(file)
+      const data = await uploadPdf(file, agentName)
       setResult(data)
       onCreated?.(data)
     } catch (err) {
@@ -89,47 +99,70 @@ export default function PdfUploadForm({ onCreated }) {
 
   return (
     <section className="card uploadCard">
-      <h2>Create a Client Interview Link</h2>
-      <p>Drop a fillable PDF and we will prepare a warm, guided experience for your client.</p>
+      {!result ? (
+        <>
+          <h2>Create a Client Interview Link</h2>
+          <p>Drop a fillable PDF and we will prepare a warm, guided experience for your client.</p>
 
-      <form onSubmit={onSubmit} className="uploadForm">
-        <input ref={inputRef} type="file" accept="application/pdf,.pdf" hidden onChange={(event) => applySelectedFile(event.target.files?.[0] || null)} />
-        <div
-          role="button"
-          tabIndex={0}
-          className={dragActive ? 'dropZone active' : 'dropZone'}
-          onClick={pickFile}
-          onKeyDown={(event) => {
-            if (event.key === 'Enter' || event.key === ' ') {
-              event.preventDefault()
-              pickFile()
-            }
-          }}
-          onDragOver={(event) => {
-            event.preventDefault()
-            setDragActive(true)
-          }}
-          onDragLeave={(event) => {
-            event.preventDefault()
-            setDragActive(false)
-          }}
-          onDrop={onDrop}
-        >
-          <p className="dropZoneTitle">Drag and drop your blank PDF</p>
-          <p className="dropZoneHint">or click to browse files</p>
-          {file && <p className="dropZoneFile">{file.name}</p>}
-        </div>
-        <button type="submit" disabled={loading || !file} className="btnPrimary">
-          {loading ? 'Preparing...' : 'Generate Share Link'}
-        </button>
-      </form>
-      {loading && <p className="loadingLine">{LOADING_STEPS[loadingStep]}</p>}
+          <form onSubmit={onSubmit} className="uploadForm">
+            <label className="inputLabel" htmlFor="agent-name-input">
+              Agent Name
+            </label>
+            <input
+              id="agent-name-input"
+              type="text"
+              className="textInput"
+              placeholder="e.g. Acme Onboarding Form"
+              value={agentName}
+              onChange={(event) => setAgentName(event.target.value)}
+              maxLength={120}
+            />
+            <input ref={inputRef} type="file" accept="application/pdf,.pdf" hidden onChange={(event) => applySelectedFile(event.target.files?.[0] || null)} />
+            <div
+              role="button"
+              tabIndex={0}
+              className={dragActive ? 'dropZone active' : 'dropZone'}
+              onClick={pickFile}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault()
+                  pickFile()
+                }
+              }}
+              onDragOver={(event) => {
+                event.preventDefault()
+                setDragActive(true)
+              }}
+              onDragLeave={(event) => {
+                event.preventDefault()
+                setDragActive(false)
+              }}
+              onDrop={onDrop}
+            >
+              <p className="dropZoneTitle">Drag and drop your blank PDF</p>
+              <p className="dropZoneHint">or click to browse files</p>
+              {file && <p className="dropZoneFile">{file.name}</p>}
+            </div>
+            <button type="submit" disabled={loading || !file} className="btnPrimary">
+              {loading ? 'Preparing...' : 'Generate Share Link'}
+            </button>
+          </form>
+          {loading && <p className="loadingLine">{LOADING_STEPS[loadingStep]}</p>}
+          {error && <p className="error">{error}</p>}
+        </>
+      ) : (
+        <>
+          <div className="uploadSuccessHead">
+            <p className="eyebrow">Success</p>
+            <h2>Your Client Link Is Ready</h2>
+            <p className="sharePrompt">Share this link with the person who needs to fill out this form.</p>
+          </div>
 
-      {error && <p className="error">{error}</p>}
-
-      {result && (
         <div className="uploadResult reveal">
           <div className="metricRow">
+            <p>
+              Name <strong>{result.agent_name || 'Untitled Agent'}</strong>
+            </p>
             <p>
               File <strong>{result.filename}</strong>
             </p>
@@ -141,7 +174,7 @@ export default function PdfUploadForm({ onCreated }) {
           <div className="shareCard">
             <div>
               <p className="shareLabel">Shareable Client Link</p>
-              <a href={shareHref} target="_blank" rel="noreferrer">
+              <a className="shareHref" href={shareHref} target="_blank" rel="noreferrer">
                 {shareHref}
               </a>
             </div>
@@ -149,21 +182,20 @@ export default function PdfUploadForm({ onCreated }) {
               Copy to Clipboard
             </button>
           </div>
-          {copied && <p className="toast">Copied!</p>}
-
-          <p>
-            Fields detected <strong>{result.fieldCount}</strong>
-          </p>
-          {widgetNames.length > 0 ? (
-            <ul className="fieldList">
-              {widgetNames.map((name) => (
-                <li key={name}>{name}</li>
-              ))}
-            </ul>
-          ) : (
-            <p>No fillable fields found in this PDF.</p>
-          )}
         </div>
+          {copied && <p className="toast">Copied!</p>}
+          <div className="resultActions">
+            <a className="btnGhost btnLink" href="/admin/agents">
+              View All Agents
+            </a>
+            <a className="btnPrimary btnLink" href={`/admin/agents/${encodeURIComponent(result.agent_id)}/intakes`}>
+              View Intakes For This Agent
+            </a>
+            <button type="button" className="btnGhost" onClick={resetToCreateAnother}>
+              Create Another Link
+            </button>
+          </div>
+        </>
       )}
     </section>
   )

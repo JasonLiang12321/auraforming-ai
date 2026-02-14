@@ -20,6 +20,7 @@ def upload_pdf() -> tuple:
 
     if not pdf_file.filename.lower().endswith(".pdf"):
         return jsonify({"error": "Only PDF files are supported."}), 400
+    agent_name = str(request.form.get("agent_name", "")).strip()
 
     try:
         file_bytes = pdf_file.read()
@@ -46,12 +47,17 @@ def upload_pdf() -> tuple:
     pdf_path.write_bytes(file_bytes)
 
     schema = {"widget_names": widget_names, "blank_values": {name: None for name in widget_names}}
-    save_agent(agent_id=agent_id, pdf_path=str(pdf_path), schema=schema)
+    if not agent_name:
+        fallback_name = pdf_file.filename.rsplit(".", 1)[0].strip()
+        agent_name = fallback_name or f"Agent {agent_id}"
+
+    save_agent(agent_id=agent_id, pdf_path=str(pdf_path), schema=schema, agent_name=agent_name)
 
     return (
         jsonify(
             {
                 "filename": pdf_file.filename,
+                "agent_name": agent_name,
                 "fieldCount": len(widget_names),
                 "widgetNames": widget_names,
                 "agent_id": agent_id,
