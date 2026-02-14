@@ -3,7 +3,7 @@ export default function HealthCard({ data, error }) {
     return (
       <section className="card softCard">
         <h2>API Status</h2>
-        <p className="error">Backend error: {error}</p>
+        <p className="error">Service unavailable: {error}</p>
       </section>
     )
   }
@@ -12,7 +12,7 @@ export default function HealthCard({ data, error }) {
     return (
       <section className="card softCard">
         <h2>API Status</h2>
-        <p>Checking backend health...</p>
+        <p>Checking service status...</p>
       </section>
     )
   }
