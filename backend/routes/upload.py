@@ -1,9 +1,11 @@
+import logging
 from io import BytesIO
 
 from flask import Blueprint, jsonify, request
 from pypdf import PdfReader
 
 upload_bp = Blueprint("upload", __name__)
+logger = logging.getLogger(__name__)
 
 
 @upload_bp.post("/upload")
@@ -23,7 +25,8 @@ def upload_pdf() -> tuple:
         reader = PdfReader(BytesIO(file_bytes))
         fields = reader.get_fields() or {}
         field_names = sorted(fields.keys())
-    except Exception:
+    except Exception as exc:
+        logger.exception("Failed to parse uploaded PDF '%s': %s", pdf_file.filename, exc)
         return jsonify({"error": "Could not parse PDF. Please upload a valid fillable PDF."}), 400
 
     return (

@@ -10,7 +10,7 @@ def create_app() -> Flask:
     CORS(app)
 
     app.register_blueprint(health_bp, url_prefix="/api")
-    app.register_blueprint(upload_bp)
+    app.register_blueprint(upload_bp, url_prefix="/api")
     return app
 
 
