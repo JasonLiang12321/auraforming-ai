@@ -17,7 +17,9 @@ model = genai.GenerativeModel(model_name="gemini-2.0-flash")
 @gemini_bp.post("/gemini")
 def gemini_endpoint():
     try:
-        data = request.get_json()
+        data = request.get_json(silent=True)
+        if data is None or not isinstance(data, dict):
+            return jsonify({"error": "Invalid or missing JSON body"}), 400
         user_input = data.get("user_input", "")
         form_field = data.get("form_field", "")
         field_context = data.get("field_context", "")
