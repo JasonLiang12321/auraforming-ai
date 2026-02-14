@@ -7,6 +7,7 @@ export default function PdfUploadForm() {
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
   const widgetNames = result?.widgetNames || []
+  const shareHref = result?.share_url ? `${window.location.origin}${result.share_url}` : ''
 
   const onSubmit = async (event) => {
     event.preventDefault()
@@ -30,39 +31,48 @@ export default function PdfUploadForm() {
   }
 
   return (
-    <section className="card">
+    <section className="card uploadCard">
       <h2>Upload Blank PDF</h2>
-      <p>Create an agent by extracting technical widget names from a blank PDF.</p>
+      <p>Drop in a fillable form and generate a ready-to-share interview link in one step.</p>
 
       <form onSubmit={onSubmit} className="uploadForm">
         <input
           type="file"
           accept="application/pdf,.pdf"
+          className="fileInput"
           onChange={(event) => setFile(event.target.files?.[0] || null)}
         />
-        <button type="submit" disabled={loading}>
+        <button type="submit" disabled={loading} className="btnPrimary">
           {loading ? 'Uploading...' : 'Upload PDF'}
         </button>
       </form>
+      {file && <p className="hint">Selected file: {file.name}</p>}
 
       {error && <p className="error">{error}</p>}
 
       {result && (
         <div className="uploadResult">
-          <p>
-            <strong>File:</strong> {result.filename}
+          <div className="metricRow">
+            <p>
+              File <strong>{result.filename}</strong>
+            </p>
+            <p>
+              Agent <strong>{result.agent_id}</strong>
+            </p>
+          </div>
+
+          <p className="shareRow">
+            Share link{' '}
+            <a href={shareHref} target="_blank" rel="noreferrer">
+              {shareHref}
+            </a>
           </p>
+
           <p>
-            <strong>Agent ID:</strong> {result.agent_id}
-          </p>
-          <p>
-            <strong>Share URL:</strong> {result.share_url}
-          </p>
-          <p>
-            <strong>Fields found:</strong> {result.fieldCount}
+            Fields detected <strong>{result.fieldCount}</strong>
           </p>
           {widgetNames.length > 0 ? (
-            <ul>
+            <ul className="fieldList">
               {widgetNames.map((name) => (
                 <li key={name}>{name}</li>
               ))}

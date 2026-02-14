@@ -28,3 +28,23 @@ export async function uploadPdf(file) {
 
   return payload
 }
+
+export async function getAgentById(agentId) {
+  const response = await fetch(`${API_BASE_URL}/agent/${agentId}`)
+  const payload = await readJson(response)
+  if (!response.ok) {
+    throw new Error(payload.error || `Could not load agent (${response.status})`)
+  }
+  return payload
+}
+
+export async function getAgentSignedUrl(agentId) {
+  const debugQuery = import.meta.env.DEV ? '?debug=1' : ''
+  const response = await fetch(`${API_BASE_URL}/api/agent/${agentId}/signed-url${debugQuery}`)
+  const payload = await readJson(response)
+  if (!response.ok) {
+    const details = payload.details ? ` | details: ${JSON.stringify(payload.details)}` : ''
+    throw new Error((payload.error || `Could not start voice session (${response.status})`) + details)
+  }
+  return payload.signed_url
+}
