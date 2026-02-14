@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from flask import Blueprint, request, jsonify
 from dotenv import load_dotenv
 import google.generativeai as genai
@@ -7,6 +8,7 @@ import google.generativeai as genai
 load_dotenv()
 
 gemini_bp = Blueprint("gemini", __name__)
+logger = logging.getLogger(__name__)
 
 # Configure Gemini API
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
@@ -72,7 +74,9 @@ STRICT Rules:
             "response": result["response"]
         }), 200
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        logger.exception("Failed to parse JSON response from Gemini API: %s", e)
         return jsonify({"error": "Invalid JSON from Gemini API"}), 500
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        logger.exception("Unexpected error in Gemini endpoint: %s", e)
+        return jsonify({"error": "An unexpected error occurred"}), 500
