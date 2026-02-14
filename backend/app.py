@@ -15,6 +15,7 @@ def create_app() -> Flask:
     app.register_blueprint(health_bp, url_prefix="/api")
     app.register_blueprint(gemini_bp)
     app.register_blueprint(upload_bp, url_prefix="/api")
+    app.register_blueprint(gemini_bp)
     return app
 
 
