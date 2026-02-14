@@ -75,8 +75,8 @@ STRICT Rules:
         }), 200
 
     except json.JSONDecodeError as e:
-        logger.exception("Failed to parse JSON response from Gemini API: %s", e)
+        logger.exception("Failed to parse JSON response from Gemini API")
         return jsonify({"error": "Invalid JSON from Gemini API"}), 500
     except Exception as e:
-        logger.exception("Unexpected error in Gemini endpoint: %s", e)
+        logger.exception("Unexpected error in Gemini endpoint")
         return jsonify({"error": "An unexpected error occurred"}), 500
