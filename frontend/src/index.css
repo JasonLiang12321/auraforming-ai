@@ -87,7 +87,7 @@ code {
   gap: 0.18em;
   text-decoration: none;
   color: #3d2f1d;
-  font-size: 1.24rem;
+  font-size: clamp(0.9rem, 3vw, 1.4rem);
   font-weight: 700;
   letter-spacing: 0.01em;
   text-transform: none;
@@ -183,14 +183,13 @@ code {
 }
 
 .landingShell {
-  min-height: 100vh;
+  height: 100vh;
   width: 100%;
   position: relative;
   display: flex;
   flex-direction: column;
-  overflow-x: hidden;
-  overflow-y: auto;
-  padding: 1rem 1rem 2.8rem;
+  overflow: hidden;
+  padding: 1rem 1rem 0;
 }
 
 .landingShell.preload .landingTopbar,
@@ -254,15 +253,28 @@ code {
   pointer-events: none;
   transition: top 760ms cubic-bezier(0.23, 0.8, 0.24, 1), transform 760ms cubic-bezier(0.23, 0.8, 0.24, 1),
     opacity 280ms ease;
+  max-width: 90%;
 }
 
 .landingIntro.intro-dock {
-  top: clamp(1.8rem, 4vw, 2.4rem);
+  top: clamp(1.2rem, 4vw, 2.4rem);
   transform: translate(-50%, 0) scale(1);
 }
 
 .landingIntro.intro-ready {
-  top: clamp(1.8rem, 4vw, 2.4rem);
+  top: clamp(1.2rem, 4vw, 2.4rem);
+  transform: translate(-50%, 0) scale(1);
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.landingIntro.intro-dock {
+  top: clamp(1.2rem, 4vw, 2.4rem);
+  transform: translate(-50%, 0) scale(1);
+}
+
+.landingIntro.intro-ready {
+  top: clamp(1.2rem, 4vw, 2.4rem);
   transform: translate(-50%, 0) scale(1);
   opacity: 1;
   pointer-events: auto;
@@ -280,7 +292,7 @@ code {
 .landingLogo {
   margin: 0;
   font-family: 'Orbitron', 'Inter', sans-serif;
-  font-size: clamp(2.7rem, 7.2vw, 6.2rem);
+  font-size: clamp(1.2rem, 4.5vw, 3.8rem);
   font-weight: 700;
   line-height: 0.95;
   letter-spacing: 0.02em;
@@ -297,7 +309,7 @@ code {
   padding: 0;
   text-transform: none;
   font-family: 'Orbitron', 'Inter', sans-serif;
-  font-size: clamp(2.7rem, 7.2vw, 6.2rem);
+  font-size: clamp(1.2rem, 4.5vw, 3.8rem);
   font-weight: 700;
   line-height: 0.95;
   letter-spacing: 0.02em;
@@ -374,15 +386,16 @@ code {
   margin: 6.4rem auto 0;
   text-align: center;
   flex: 1;
-  min-height: calc(100vh - 150px);
   display: grid;
   place-items: center;
+  overflow: hidden;
 }
 
 .landingStageCard {
   width: 100%;
   padding: clamp(0.5rem, 1.8vw, 1.2rem) clamp(0.5rem, 1.8vw, 1.2rem) clamp(1.2rem, 2.4vw, 1.8rem);
-  min-height: 520px;
+  max-height: 100%;
+  overflow: hidden;
 }
 
 .landingStage {
@@ -420,7 +433,7 @@ code {
   width: min(860px, 100%);
   border: 1px solid var(--line-soft);
   border-radius: 1.2rem;
-  padding: 1.2rem;
+  padding: clamp(0.6rem, 2vw, 1.2rem);
   background: linear-gradient(162deg, rgba(255, 251, 245, 0.94), rgba(244, 233, 215, 0.93));
   opacity: 0.95;
 }
@@ -496,8 +509,8 @@ code {
 }
 
 .gatewayIcon {
-  width: 50px;
-  height: 50px;
+  width: clamp(36px, 8vw, 60px);
+  height: clamp(36px, 8vw, 60px);
   margin-bottom: 0.5rem;
   stroke: #a47f49;
   fill: rgba(212, 182, 132, 0.18);
@@ -656,7 +669,7 @@ code {
 
 .card h2 {
   margin: 0 0 0.55rem;
-  font-size: 1.02rem;
+  font-size: clamp(0.85rem, 2.5vw, 1.1rem);
   letter-spacing: 0.02em;
 }
 
@@ -755,7 +768,7 @@ code {
 
 .dropZoneTitle {
   margin: 0;
-  font-size: 1.08rem;
+  font-size: clamp(0.9rem, 2.5vw, 1.2rem);
   font-weight: 700;
 }
 
@@ -1117,6 +1130,7 @@ button:disabled {
 
 .modalHeader h2 {
   margin: 0;
+  font-size: clamp(1rem, 2.5vw, 1.3rem);
 }
 
 .modalSplit {
@@ -1838,7 +1852,7 @@ button:disabled {
   }
 
   .landingIntro.intro-dock {
-    top: 1.6rem;
+    top: 1.2rem;
   }
 
   .landingStageCard {
@@ -1901,5 +1915,52 @@ button:disabled {
   .gateFormToken {
     font-size: 0.82rem;
     letter-spacing: 0.08em;
+  }
+}
+
+@media (max-width: 480px) {
+  .landingLogo,
+  .landingLogoButton {
+    font-size: clamp(1.3rem, 4vw, 1.8rem);
+  }
+
+  .landingIntro {
+    max-width: 95%;
+  }
+
+  .landingIntro.intro-dock,
+  .landingIntro.intro-ready {
+    top: 1.2rem;
+  }
+
+  .landingHero {
+    margin-top: 3.2rem;
+  }
+}
+
+@media (max-width: 380px) {
+  .landingLogo,
+  .landingLogoButton {
+    font-size: clamp(1.1rem, 3.5vw, 1.5rem);
+  }
+
+  .landingIntro {
+    max-width: 96%;
+  }
+
+  .landingIntro.intro-dock,
+  .landingIntro.intro-ready {
+    top: 1rem;
+  }
+
+  .landingHero {
+    margin-top: 2.8rem;
+  }
+}
+
+@media (min-width: 1200px) {
+  .landingLogo,
+  .landingLogoButton {
+    font-size: clamp(2.2rem, 5vw, 4.2rem);
   }
 }

@@ -9,7 +9,8 @@ from routes.upload import upload_bp
 from routes.voice import voice_bp
 from routes.interview import interview_bp
 from routes.dashboard import dashboard_bp
-from storage import init_storage
+from routes.submission import submission_bp
+from storage import get_agent, init_storage
 
 from routes.gemini import gemini_bp
 
@@ -29,6 +30,8 @@ def create_app() -> Flask:
     app.register_blueprint(interview_bp, url_prefix="/api")
     app.register_blueprint(dashboard_bp, url_prefix="/api")
     app.register_blueprint(agent_bp, url_prefix="/api")
+    app.register_blueprint(submission_bp, url_prefix="/api")
+    
     return app
 
 
