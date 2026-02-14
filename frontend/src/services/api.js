@@ -29,6 +29,7 @@ export async function uploadPdf(file) {
   return payload
 }
 
+
 export async function getAgentById(agentId) {
   const response = await fetch(`${API_BASE_URL}/api/agent/${agentId}`)
   const payload = await readJson(response)
