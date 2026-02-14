@@ -4,6 +4,8 @@ Lean full-stack starter with:
 - Frontend: React + Vite
 - Backend: Flask + Flask-CORS
 - Health check endpoint: `GET /api/health`
+- Business upload endpoint: `POST /api/admin/upload`
+- Share endpoint: `GET /agent/{agent_id}`
 
 ## Prerequisites
 
@@ -16,8 +18,10 @@ Lean full-stack starter with:
 .
 ├── backend/
 │   ├── app.py
+│   ├── storage.py
 │   ├── requirements.txt
 │   └── routes/
+│       ├── upload.py
 │       └── health.py
 └── frontend/
     ├── package.json
@@ -81,6 +85,24 @@ Expected response:
 {"service":"flask-backend","status":"ok"}
 ```
 
+## 5) Create Agent From Blank PDF
+
+```bash
+curl -X POST http://127.0.0.1:5050/api/admin/upload \
+  -F "file=@/absolute/path/to/blank-form.pdf"
+```
+
+Expected response shape:
+
+```json
+{
+  "agent_id": "a1b2c3d4",
+  "share_url": "/agent/a1b2c3d4",
+  "fieldCount": 2,
+  "widgetNames": ["Text_Field_01", "Checkbox_02"]
+}
+```
+
 ## Optional: Change Backend URL in Frontend
 
 Set an env var if needed:
@@ -89,4 +111,3 @@ Set an env var if needed:
 cd frontend
 echo "VITE_API_BASE_URL=http://127.0.0.1:5050" > .env.local
 ```
-
