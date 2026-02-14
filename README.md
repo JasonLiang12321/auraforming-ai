@@ -5,7 +5,10 @@ Lean full-stack starter with:
 - Backend: Flask + Flask-CORS
 - Health check endpoint: `GET /api/health`
 - Business upload endpoint: `POST /api/admin/upload`
-- Share endpoint: `GET /agent/{agent_id}`
+- Share page route: `/agent/{agent_id}` (frontend)
+- Agent details endpoint: `GET /api/agent/{agent_id}`
+- ElevenLabs signed-url endpoint: `GET /api/agent/{agent_id}/signed-url`
+- ElevenLabs prompt config doc: `docs/ElevenlabsAgentConfig.md`
 
 ## Prerequisites
 
@@ -72,6 +75,29 @@ npm run dev
 
 Frontend runs on: `http://127.0.0.1:5173`
 
+Pages:
+- Admin: `http://127.0.0.1:5173/admin`
+- End-user: `http://127.0.0.1:5173/agent/<agent_id>`
+
+## 3.1) ElevenLabs Keys Required
+
+Set these before running backend:
+
+```bash
+export ELEVENLABS_API_KEY="your_api_key"
+export ELEVENLABS_AGENT_ID="your_conversational_agent_id"
+```
+
+Notes:
+- Configure that ElevenLabs agent with voice model `eleven_flash_v2_5`.
+- Configure a first message so users hear a greeting when the session connects.
+- If your agent prompt/first message uses dynamic variables, they must be provided at session start.
+- This app auto-sends these variables from the uploaded schema on `/agent/:id`:
+  - `FIRST_MISSING_FIELD_NAME`
+  - `REQUIRED_FIELDS_JSON`
+  - `MISSING_FIELDS_LIST`
+- Example failure if missing: `Missing required dynamic variables in first message: {'FIRST_MISSING_FIELD_NAME'}`.
+
 ## 4) Verify API Connection
 
 In a third terminal:
@@ -103,6 +129,12 @@ Expected response shape:
   "fieldCount": 2,
   "widgetNames": ["Text_Field_01", "Checkbox_02"]
 }
+```
+
+Open this share URL in frontend:
+
+```text
+http://127.0.0.1:5173/agent/a1b2c3d4
 ```
 
 ## Optional: Change Backend URL in Frontend
