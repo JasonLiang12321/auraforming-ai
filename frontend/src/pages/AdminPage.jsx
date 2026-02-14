@@ -55,7 +55,7 @@ export default function AdminPage() {
         <form onSubmit={handleUpload}>
           <input
             type="file"
-            accept=".pdf"
+            accept="application/pdf,.pdf"
             onChange={handleFileChange}
             disabled={uploading}
             required
