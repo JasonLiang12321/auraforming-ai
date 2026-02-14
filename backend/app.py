@@ -3,12 +3,14 @@ from flask_cors import CORS
 
 from routes.health import health_bp
 
+from routes.gemini import gemini_bp
 
 def create_app() -> Flask:
     app = Flask(__name__)
     CORS(app)
 
     app.register_blueprint(health_bp, url_prefix="/api")
+    app.register_blueprint(gemini_bp)
     return app
 
 
