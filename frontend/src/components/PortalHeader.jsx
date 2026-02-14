@@ -13,13 +13,13 @@ export default function PortalHeader() {
         <span className="wordmarkText">ai</span>
       </Link>
       <nav className="portalNav">
-        <Link className={isAdmin ? 'navLink active' : 'navLink'} to="/admin">
+        <Link className={isAdmin ? 'navLink createLinkNav active' : 'navLink createLinkNav'} to="/admin">
           Create Link
         </Link>
         <Link className={isDashboard ? 'navLink active' : 'navLink'} to="/admin/dashboard">
           Sessions
         </Link>
-        <span className="navHint">Secure, guided client experience</span>
+        <span className="navHint">SECURE, GUIDED CLIENT EXPERIENCE</span>
       </nav>
     </header>
   )

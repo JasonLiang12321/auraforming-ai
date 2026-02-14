@@ -1473,6 +1473,14 @@ button:disabled {
 }
 
 @media (max-width: 480px) {
+  .createLinkNav {
+    display: inline-block;
+    max-width: 6.2rem;
+    text-align: center;
+    line-height: 1.15;
+    white-space: normal;
+  }
+
   .landingLogo,
   .landingLogoButton {
     font-size: clamp(1.3rem, 4vw, 1.8rem);
