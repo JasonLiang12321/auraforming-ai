@@ -9,3 +9,20 @@ export async function getHealth() {
 
   return response.json()
 }
+
+export async function uploadPdf(file) {
+  const formData = new FormData()
+  formData.append('file', file)
+
+  const response = await fetch(`${API_BASE_URL}/api/upload`, {
+    method: 'POST',
+    body: formData,
+  })
+
+  const payload = await response.json()
+  if (!response.ok) {
+    throw new Error(payload.error || `Upload failed (${response.status})`)
+  }
+
+  return payload
+}

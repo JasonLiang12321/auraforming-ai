@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import HealthCard from '../components/HealthCard'
+import PdfUploadForm from '../components/PdfUploadForm'
 import { getHealth } from '../services/api'
 
 export default function HomePage() {
@@ -23,6 +24,7 @@ export default function HomePage() {
     <main className="container">
       <h1>Hackathon Starter</h1>
       <HealthCard data={data} error={error} />
+      <PdfUploadForm />
     </main>
   )
 }
