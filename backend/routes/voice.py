@@ -5,7 +5,7 @@ from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, jsonify, request, send_file
 
 from storage import get_agent
 
@@ -81,3 +81,4 @@ def get_signed_url(agent_id: str) -> tuple:
 
     logger.info("Signed URL generated successfully for agent_id=%s", agent_id)
     return jsonify({"signed_url": signed_url}), 200
+
