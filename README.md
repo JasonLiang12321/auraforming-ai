@@ -5,7 +5,8 @@ Lean full-stack starter with:
 - Backend: Flask + Flask-CORS
 - Health check endpoint: `GET /api/health`
 - Business upload endpoint: `POST /api/admin/upload`
-- Share endpoint: `GET /agent/{agent_id}`
+- Share page route: `/agent/{agent_id}` (frontend)
+- Agent details endpoint: `GET /api/agent/{agent_id}`
 - ElevenLabs signed-url endpoint: `GET /api/agent/{agent_id}/signed-url`
 - ElevenLabs prompt config doc: `docs/ElevenlabsAgentConfig.md`
 

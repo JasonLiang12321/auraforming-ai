@@ -21,7 +21,7 @@ def create_app() -> Flask:
 app = create_app()
 
 
-@app.get("/agent/<agent_id>")
+@app.get("/api/agent/<agent_id>")
 def agent_details(agent_id: str) -> tuple:
     agent = get_agent(agent_id)
     if not agent:
