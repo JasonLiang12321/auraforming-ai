@@ -8,6 +8,8 @@ Lean full-stack starter with:
 - Share page route: `/agent/{agent_id}` (frontend)
 - Agent details endpoint: `GET /api/agent/{agent_id}`
 - ElevenLabs signed-url endpoint: `GET /api/agent/{agent_id}/signed-url`
+- Completed sessions endpoint: `GET /api/admin/dashboard/sessions`
+- Completed session detail endpoint: `GET /api/admin/dashboard/sessions/{session_id}`
 - ElevenLabs prompt config doc: `docs/ElevenlabsAgentConfig.md`
 
 ## Prerequisites
@@ -77,6 +79,7 @@ Frontend runs on: `http://127.0.0.1:5173`
 
 Pages:
 - Admin: `http://127.0.0.1:5173/admin`
+- Admin dashboard: `http://127.0.0.1:5173/admin/dashboard`
 - End-user: `http://127.0.0.1:5173/agent/<agent_id>`
 
 ## 3.1) ElevenLabs Keys Required
@@ -91,12 +94,6 @@ export ELEVENLABS_AGENT_ID="your_conversational_agent_id"
 Notes:
 - Configure that ElevenLabs agent with voice model `eleven_flash_v2_5`.
 - Configure a first message so users hear a greeting when the session connects.
-- If your agent prompt/first message uses dynamic variables, they must be provided at session start.
-- This app auto-sends these variables from the uploaded schema on `/agent/:id`:
-  - `FIRST_MISSING_FIELD_NAME`
-  - `REQUIRED_FIELDS_JSON`
-  - `MISSING_FIELDS_LIST`
-- Example failure if missing: `Missing required dynamic variables in first message: {'FIRST_MISSING_FIELD_NAME'}`.
 
 ## 4) Verify API Connection
 

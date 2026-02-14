@@ -1,42 +1,35 @@
-import { useEffect, useState } from 'react'
-import HealthCard from '../components/HealthCard'
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import PdfUploadForm from '../components/PdfUploadForm'
 import PortalHeader from '../components/PortalHeader'
-import { getHealth } from '../services/api'
 
 export default function AdminPage() {
-  const [data, setData] = useState(null)
-  const [error, setError] = useState('')
-
-  useEffect(() => {
-    const checkApi = async () => {
-      try {
-        const response = await getHealth()
-        setData(response)
-      } catch (err) {
-        setError(err.message)
-      }
-    }
-
-    checkApi()
-  }, [])
+  const [lastAgent, setLastAgent] = useState(null)
 
   return (
     <main className="pageShell">
       <PortalHeader />
 
       <section className="hero">
-        <p className="eyebrow">Ops Console</p>
-        <h1>Compile Forms Into Interactive Voice Sessions</h1>
+        <p className="eyebrow">Business Portal</p>
+        <h1>Give Clients a Calm, Guided Way to Complete Complex Forms</h1>
         <p className="heroText">
-          Ingest a fillable PDF, generate a unique client node, and launch a real-time conversational pipeline from
-          your admin control plane.
+          Upload a blank form once, share a private interview link, and review completed sessions in one place.
         </p>
+        <div className="heroActions">
+          <Link className="btnPrimary btnLink" to="/admin/dashboard">
+            Open Session Dashboard
+          </Link>
+          {lastAgent?.share_url ? (
+            <a className="btnGhost btnLink" href={lastAgent.share_url} target="_blank" rel="noreferrer">
+              Open Latest Agent
+            </a>
+          ) : null}
+        </div>
       </section>
 
-      <section className="gridTwo">
-        <HealthCard data={data} error={error} />
-        <PdfUploadForm />
+      <section className="singleColumn">
+        <PdfUploadForm onCreated={setLastAgent} />
       </section>
     </main>
   )
