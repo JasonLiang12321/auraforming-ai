@@ -46,6 +46,11 @@ button {
   background: #111827;
   color: #ffffff;
   cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+button:hover:not(:disabled) {
+  background: #374151;
 }
 
 button:disabled {
@@ -53,6 +58,208 @@ button:disabled {
   cursor: not-allowed;
 }
 
+code {
+  background: #f3f4f6;
+  padding: 0.2rem 0.4rem;
+  border-radius: 4px;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.875rem;
+}
+
 .uploadResult {
-  margin-top: 0.75rem;
+  margin-top: 1.5rem;
+  background: #f0fdf4;
+  border-left: 4px solid #16a34a;
+  padding: 1.5rem;
+  border-radius: 8px;
+}
+
+.uploadResult h3 {
+  margin-top: 0;
+  color: #16a34a;
+  margin-bottom: 1rem;
+}
+
+.resultDetails {
+  background: #ffffff;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid #dcfce7;
+  margin-bottom: 1rem;
+}
+
+.resultDetails p {
+  margin: 0.5rem 0;
+}
+
+.shareableLink {
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+}
+
+.linkContainer {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+  margin-top: 0.5rem;
+}
+
+.linkContainer code {
+  flex: 1;
+  background: #ffffff;
+  border: 1px solid #bfdbfe;
+  padding: 0.75rem;
+  display: block;
+  word-break: break-all;
+}
+
+.copyBtn {
+  background: #3b82f6;
+  border-color: #2563eb;
+  padding: 0.75rem 1rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.copyBtn:hover {
+  background: #2563eb;
+}
+
+.widgetsList {
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1rem;
+  margin-top: 1rem;
+}
+
+.widgetsList ul {
+  list-style: none;
+  padding: 0;
+  margin: 0.75rem 0 0 0;
+}
+
+.widgetsList li {
+  padding: 0.5rem 0.75rem;
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  margin: 0.25rem 0;
+  font-family: 'Monaco', 'Courier New', monospace;
+  font-size: 0.875rem;
+  color: #475569;
+}
+
+/* Agent Interface Styles */
+.agent-interface {
+  text-align: center;
+}
+
+.agent-id {
+  color: #6b7280;
+  margin: 1rem 0 2rem 0;
+  font-size: 0.95rem;
+}
+
+.push-to-talk {
+  background: #ffffff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 2rem;
+  margin-top: 1.5rem;
+}
+
+/* Microphone Toggle Styles */
+.microphone-toggle {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+}
+
+.mic-button {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: 1rem 2rem;
+  font-size: 1.125rem;
+  font-weight: 600;
+  border-radius: 12px;
+  border: 2px solid #d1d5db;
+  background: #f3f4f6;
+  color: #111827;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  min-width: 200px;
+}
+
+.mic-button:hover:not(:disabled) {
+  background: #e5e7eb;
+  border-color: #9ca3af;
+}
+
+.mic-button.active {
+  background: #dc2626;
+  color: #ffffff;
+  border-color: #991b1b;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.1);
+}
+
+.mic-button.active:hover {
+  background: #b91c1c;
+}
+
+.mic-button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.mic-icon {
+  font-size: 1.5rem;
+}
+
+.mic-text {
+  flex: 1;
+  text-align: left;
+}
+
+.mic-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: pulse 1.5s infinite;
+  margin-left: 0.5rem;
+}
+
+@keyframes pulse {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+.status-message {
+  padding: 0.75rem 1rem;
+  background: #dbeafe;
+  color: #1e40af;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  border: 1px solid #93c5fd;
+}
+
+.error-message {
+  padding: 0.75rem 1rem;
+  background: #fee2e2;
+  color: #b91c1c;
+  border-radius: 8px;
+  font-size: 0.875rem;
+  border: 1px solid #fecaca;
 }

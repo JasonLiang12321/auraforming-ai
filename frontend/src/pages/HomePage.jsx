@@ -2,7 +2,6 @@ import { useEffect, useState } from 'react'
 import HealthCard from '../components/HealthCard'
 import PdfUploadForm from '../components/PdfUploadForm'
 import { getHealth } from '../services/api'
-import StartButton from '../components/StartButton'
 
 export default function HomePage() {
   const [data, setData] = useState(null)
@@ -26,7 +25,6 @@ export default function HomePage() {
       <h1>Hackathon Starter</h1>
       <HealthCard data={data} error={error} />
       <PdfUploadForm />
-      <StartButton />
     </main>
   )
 }
