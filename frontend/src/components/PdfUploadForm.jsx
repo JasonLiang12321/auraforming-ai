@@ -6,7 +6,7 @@ export default function PdfUploadForm() {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
   const [result, setResult] = useState(null)
-  const widgetNames = result?.widgetNames || result?.fieldNames || []
+  const widgetNames = result?.widgetNames || []
 
   const onSubmit = async (event) => {
     event.preventDefault()

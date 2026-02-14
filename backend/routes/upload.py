@@ -53,7 +53,6 @@ def upload_pdf() -> tuple:
             {
                 "filename": pdf_file.filename,
                 "fieldCount": len(widget_names),
-                "fieldNames": widget_names,
                 "widgetNames": widget_names,
                 "agent_id": agent_id,
                 "share_url": f"/agent/{agent_id}",

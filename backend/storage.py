@@ -24,7 +24,6 @@ def init_storage() -> None:
             )
             """
         )
-        conn.commit()
 
 
 def save_agent(agent_id: str, pdf_path: str, schema: dict) -> None:
@@ -37,7 +36,6 @@ def save_agent(agent_id: str, pdf_path: str, schema: dict) -> None:
             """,
             (agent_id, pdf_path, json.dumps(schema), created_at),
         )
-        conn.commit()
 
 
 def get_agent(agent_id: str) -> dict | None:
