@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { uploadPdf } from '../services/api'
-
-const LOADING_STEPS = ['Uploading your form...', 'Reviewing fillable fields...', 'Preparing your guided interview link...']
+import { useI18n } from '../i18n/I18nProvider'
 
 export default function PdfUploadForm({ onCreated }) {
+  const { t } = useI18n()
   const [file, setFile] = useState(null)
   const [agentName, setAgentName] = useState('')
   const [loading, setLoading] = useState(false)
@@ -13,6 +13,10 @@ export default function PdfUploadForm({ onCreated }) {
   const [result, setResult] = useState(null)
   const [copied, setCopied] = useState(false)
   const inputRef = useRef(null)
+  const loadingSteps = useMemo(
+    () => [t('upload_step_upload'), t('upload_step_review'), t('upload_step_prepare')],
+    [t],
+  )
   const shareHref = useMemo(
     () => (result?.share_url ? `${window.location.origin}${result.share_url}` : ''),
     [result?.share_url],
@@ -25,10 +29,10 @@ export default function PdfUploadForm({ onCreated }) {
     }
 
     const interval = setInterval(() => {
-      setLoadingStep((prev) => (prev + 1) % LOADING_STEPS.length)
+      setLoadingStep((prev) => (prev + 1) % loadingSteps.length)
     }, 900)
     return () => clearInterval(interval)
-  }, [loading])
+  }, [loading, loadingSteps.length])
 
   useEffect(() => {
     if (!copied) return
@@ -47,7 +51,7 @@ export default function PdfUploadForm({ onCreated }) {
   const applySelectedFile = (nextFile) => {
     if (!nextFile) return
     if (nextFile.type !== 'application/pdf' && !nextFile.name.toLowerCase().endsWith('.pdf')) {
-      setError('Only PDF files are supported.')
+      setError(t('upload_error_pdf_only'))
       return
     }
     setError('')
@@ -71,7 +75,7 @@ export default function PdfUploadForm({ onCreated }) {
       await navigator.clipboard.writeText(shareHref)
       setCopied(true)
     } catch {
-      setError('Clipboard write failed. Copy manually from the link.')
+      setError(t('upload_error_clipboard'))
     }
   }
 
@@ -81,7 +85,7 @@ export default function PdfUploadForm({ onCreated }) {
     setResult(null)
 
     if (!file) {
-      setError('Please select a PDF file first.')
+      setError(t('upload_error_select_pdf'))
       return
     }
 
@@ -101,18 +105,18 @@ export default function PdfUploadForm({ onCreated }) {
     <section className="card uploadCard">
       {!result ? (
         <>
-          <h2>Create a Client Interview Link</h2>
-          <p>Drop a fillable PDF and we will prepare a warm, guided experience for your client.</p>
+          <h2>{t('upload_title')}</h2>
+          <p>{t('upload_subtitle')}</p>
 
           <form onSubmit={onSubmit} className="uploadForm">
             <label className="inputLabel" htmlFor="agent-name-input">
-              Agent Name
+              {t('upload_agent_name')}
             </label>
             <input
               id="agent-name-input"
               type="text"
               className="textInput"
-              placeholder="e.g. Acme Onboarding Form"
+              placeholder={t('upload_agent_name_placeholder')}
               value={agentName}
               onChange={(event) => setAgentName(event.target.value)}
               maxLength={120}
@@ -139,60 +143,60 @@ export default function PdfUploadForm({ onCreated }) {
               }}
               onDrop={onDrop}
             >
-              <p className="dropZoneTitle">Drag and drop your blank PDF</p>
-              <p className="dropZoneHint">or click to browse files</p>
+              <p className="dropZoneTitle">{t('upload_drop_title')}</p>
+              <p className="dropZoneHint">{t('upload_drop_hint')}</p>
               {file && <p className="dropZoneFile">{file.name}</p>}
             </div>
             <button type="submit" disabled={loading || !file} className="btnPrimary">
-              {loading ? 'Preparing...' : 'Generate Share Link'}
+              {loading ? t('upload_prepare') : t('upload_generate_link')}
             </button>
           </form>
-          {loading && <p className="loadingLine">{LOADING_STEPS[loadingStep]}</p>}
+          {loading && <p className="loadingLine">{loadingSteps[loadingStep]}</p>}
           {error && <p className="error">{error}</p>}
         </>
       ) : (
         <>
           <div className="uploadSuccessHead">
-            <p className="eyebrow">Success</p>
-            <h2>Your Client Link Is Ready</h2>
-            <p className="sharePrompt">Share this link with the person who needs to fill out this form.</p>
+            <p className="eyebrow">{t('upload_success')}</p>
+            <h2>{t('upload_success_title')}</h2>
+            <p className="sharePrompt">{t('upload_success_subtitle')}</p>
           </div>
 
         <div className="uploadResult reveal">
           <div className="metricRow">
             <p>
-              Name <strong>{result.agent_name || 'Untitled Agent'}</strong>
+              {t('upload_name')} <strong>{result.agent_name || t('agents_untitled')}</strong>
             </p>
             <p>
-              File <strong>{result.filename}</strong>
+              {t('upload_file')} <strong>{result.filename}</strong>
             </p>
             <p>
-              Agent <strong>{result.agent_id}</strong>
+              {t('upload_agent')} <strong>{result.agent_id}</strong>
             </p>
           </div>
 
           <div className="shareCard">
             <div>
-              <p className="shareLabel">Shareable Client Link</p>
+              <p className="shareLabel">{t('upload_shareable_link')}</p>
               <a className="shareHref" href={shareHref} target="_blank" rel="noreferrer">
                 {shareHref}
               </a>
             </div>
             <button type="button" className="btnGhost" onClick={onCopy}>
-              Copy to Clipboard
+              {t('upload_copy_clipboard')}
             </button>
           </div>
         </div>
-          {copied && <p className="toast">Copied!</p>}
+          {copied && <p className="toast">{t('upload_copied')}</p>}
           <div className="resultActions">
             <a className="btnGhost btnLink" href="/admin/agents">
-              View All Agents
+              {t('upload_view_agents')}
             </a>
             <a className="btnPrimary btnLink" href={`/admin/agents/${encodeURIComponent(result.agent_id)}/intakes`}>
-              View Intakes For This Agent
+              {t('upload_view_intakes')}
             </a>
             <button type="button" className="btnGhost" onClick={resetToCreateAnother}>
-              Create Another Link
+              {t('upload_create_another')}
             </button>
           </div>
         </>

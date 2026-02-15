@@ -12,6 +12,19 @@ export async function getHealth() {
   return payload
 }
 
+export async function translateUiMessages(language_code, source_messages) {
+  const response = await fetch(`${API_BASE_URL}/api/gemini/ui-translations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ language_code, source_messages }),
+  })
+  const payload = await readJson(response)
+  if (!response.ok) {
+    throw new Error(payload.error || `Could not translate UI messages (${response.status})`)
+  }
+  return payload
+}
+
 export async function uploadPdf(file, agentName = '') {
   const formData = new FormData()
   formData.append('file', file)
@@ -71,6 +84,27 @@ export async function getAgentById(agentId) {
   return payload
 }
 
+export async function getAgentLivePreviewPdf(agentId, answers) {
+  const response = await fetch(`${API_BASE_URL}/api/agent/${agentId}/preview`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ answers }),
+  })
+
+  if (!response.ok) {
+    let message = `Could not generate live preview (${response.status})`
+    try {
+      const payload = await readJson(response)
+      message = payload.error || message
+    } catch {
+      // ignore parse error
+    }
+    throw new Error(message)
+  }
+
+  return response.blob()
+}
+
 export async function getAgentSignedUrl(agentId) {
   const response = await fetch(`${API_BASE_URL}/api/agent/${agentId}/signed-url`)
   const payload = await readJson(response)
@@ -80,11 +114,12 @@ export async function getAgentSignedUrl(agentId) {
   return payload.signed_url
 }
 
-export async function startGuidedInterview(agentId) {
+export async function startGuidedInterview(agentId, options = {}) {
+  const { language_code = '' } = options
   const response = await fetch(`${API_BASE_URL}/api/agent/${agentId}/interview/start`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({}),
+    body: JSON.stringify({ language_code }),
   })
   const payload = await readJson(response)
   if (!response.ok) {

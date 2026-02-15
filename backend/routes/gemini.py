@@ -2,6 +2,8 @@ import json
 import logging
 import os
 import uuid
+import hashlib
+import re
 
 import google.generativeai as genai
 from dotenv import load_dotenv
@@ -16,6 +18,7 @@ logger = logging.getLogger(__name__)
 
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "")
 GEMINI_MODEL = os.getenv("GEMINI_MODEL", "gemini-2.0-flash")
+UI_TRANSLATION_CACHE: dict[str, dict[str, str]] = {}
 
 if GEMINI_API_KEY:
     genai.configure(api_key=GEMINI_API_KEY)
@@ -31,6 +34,25 @@ class GeminiRequestError(RuntimeError):
 
 class GeminiRateLimitError(RuntimeError):
     pass
+
+
+def _language_family(language_code: str) -> str:
+    return str(language_code or "").strip().split("-", 1)[0].lower()
+
+
+def _needs_translation_retry(*, source_text: str, translated_text: str) -> bool:
+    source = str(source_text or "").strip()
+    translated = str(translated_text or "").strip()
+    if not source:
+        return False
+    if not translated:
+        return True
+    if source != translated:
+        return False
+    # Exact English echo for long phrases usually means untranslated output.
+    if len(source) > 12 and (" " in source or re.search(r"[A-Za-z]{6,}", source)):
+        return True
+    return False
 
 
 def run_gemini_json(*, prompt: str, response_schema: dict, model_name: str | None = None) -> dict:
@@ -197,4 +219,129 @@ Requirements:
         return jsonify({"questions": questions_map, "form_fields": form_fields}), 200
     except Exception as exc:
         logger.exception("Gemini questions endpoint failure: %s", exc)
+        return jsonify({"error": str(exc)}), 500
+
+
+@gemini_bp.post("/gemini/ui-translations")
+def translate_ui_messages():
+    try:
+        data = request.get_json(silent=True) or {}
+        language_code = str(data.get("language_code", "")).strip()
+        source_messages = data.get("source_messages", {})
+        if not language_code:
+            return jsonify({"error": "Missing language_code"}), 400
+        if not isinstance(source_messages, dict) or not source_messages:
+            return jsonify({"error": "Missing source_messages"}), 400
+
+        family = _language_family(language_code)
+        if family in {"en", "ru", "zh"}:
+            return jsonify({"messages": source_messages, "cached": True}), 200
+
+        normalized_messages = {str(key): str(value) for key, value in source_messages.items() if str(key).strip()}
+        if not normalized_messages:
+            return jsonify({"error": "No valid source messages"}), 400
+
+        payload_hash = hashlib.sha1(
+            json.dumps(normalized_messages, ensure_ascii=False, sort_keys=True).encode("utf-8")
+        ).hexdigest()
+        cache_key = f"{family}:{payload_hash}"
+        if cache_key in UI_TRANSLATION_CACHE:
+            return jsonify({"messages": UI_TRANSLATION_CACHE[cache_key], "cached": True}), 200
+
+        translated: dict[str, str] = {}
+
+        def merge_translations(result_payload: dict, source_map: dict[str, str]) -> None:
+            for item in result_payload.get("translations", []) if isinstance(result_payload.get("translations"), list) else []:
+                if not isinstance(item, dict):
+                    continue
+                key = str(item.get("key", "")).strip()
+                text = str(item.get("text", "")).strip()
+                if key in source_map and text:
+                    translated[key] = text
+
+        def run_translation_pass(source_map: dict[str, str]) -> None:
+            prompt = f"""
+You are translating website UI copy.
+Target language family code: "{family}".
+
+Translate every value in this JSON object:
+{json.dumps(source_map, ensure_ascii=False)}
+
+Return STRICT JSON:
+{{
+  "translations": [
+    {{"key": "string", "text": "string"}}
+  ]
+}}
+
+Rules:
+- Keep placeholders exactly unchanged, e.g. {{count}}, {{id}}, {{name}}, {{value}}.
+- Keep technical terms and product names unchanged when appropriate (PDF, JSON, API, Gemini, auraforming).
+- Preserve meaning and tone for interface labels/buttons.
+- Never return empty text.
+""".strip()
+
+            result_payload = run_gemini_json(
+                prompt=prompt,
+                response_schema={
+                    "type": "object",
+                    "properties": {
+                        "translations": {
+                            "type": "array",
+                            "items": {
+                                "type": "object",
+                                "properties": {
+                                    "key": {"type": "string"},
+                                    "text": {"type": "string"},
+                                },
+                                "required": ["key", "text"],
+                            },
+                        }
+                    },
+                    "required": ["translations"],
+                },
+            )
+            merge_translations(result_payload, source_map)
+
+        # Pass 1 for all keys, then retry unresolved keys up to 2 more times.
+        run_translation_pass(normalized_messages)
+        for _ in range(2):
+            unresolved = {
+                key: source_value
+                for key, source_value in normalized_messages.items()
+                if _needs_translation_retry(
+                    source_text=source_value,
+                    translated_text=translated.get(key, ""),
+                )
+            }
+            if not unresolved:
+                break
+            run_translation_pass(unresolved)
+
+        # Guarantee every requested key has a value.
+        for key, value in normalized_messages.items():
+            translated.setdefault(key, value)
+
+        translated_quality = sum(
+            1
+            for key, source_value in normalized_messages.items()
+            if not _needs_translation_retry(source_text=source_value, translated_text=translated.get(key, ""))
+        ) / max(1, len(normalized_messages))
+
+        # Avoid persisting weak/partial results so client can retry later.
+        if translated_quality >= 0.85:
+            UI_TRANSLATION_CACHE[cache_key] = translated
+
+        return jsonify({"messages": translated, "cached": False}), 200
+    except GeminiAuthError as exc:
+        logger.warning("UI translation blocked by Gemini auth issue: %s", exc)
+        return jsonify({"error": str(exc), "code": "GEMINI_AUTH"}), 502
+    except GeminiRateLimitError as exc:
+        logger.warning("UI translation blocked by Gemini rate limit: %s", exc)
+        return jsonify({"error": str(exc), "code": "GEMINI_RATE_LIMIT"}), 429
+    except GeminiRequestError as exc:
+        logger.warning("UI translation failed due to Gemini request issue: %s", exc)
+        return jsonify({"error": str(exc), "code": "GEMINI_REQUEST"}), 502
+    except Exception as exc:
+        logger.exception("UI translation endpoint failure: %s", exc)
         return jsonify({"error": str(exc)}), 500

@@ -122,12 +122,27 @@ def upload_pdf() -> tuple:
 
                     item = fields_by_key.get(field_key)
                     if not item:
+                        rect = getattr(widget, "rect", None)
                         item = {
                             "key": field_key,
                             "label": field_label,
                             "type": field_type,
                             "options": [],
                             "page": page_index + 1,
+                            "rect": (
+                                {
+                                    "x0": float(rect.x0),
+                                    "y0": float(rect.y0),
+                                    "x1": float(rect.x1),
+                                    "y1": float(rect.y1),
+                                }
+                                if rect is not None
+                                else None
+                            ),
+                            "page_size": {
+                                "width": float(page.rect.width),
+                                "height": float(page.rect.height),
+                            },
                         }
                         fields_by_key[field_key] = item
                         interview_fields.append(item)

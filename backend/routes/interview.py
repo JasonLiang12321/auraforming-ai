@@ -26,6 +26,8 @@ class InterviewSession:
     missing_fields: list[str]
     form_name: str = ""
     field_meta: dict[str, dict] = field(default_factory=dict)
+    language_code: str = "en-US"
+    language_label: str = "English (US)"
     answers: dict[str, str] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     updated_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -41,10 +43,192 @@ class InterviewSession:
 
 SESSIONS: dict[str, InterviewSession] = {}
 ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1"
+SUPPORTED_INTERVIEW_LANGUAGES: dict[str, str] = {
+    "en-US": "English (US)",
+    "en-GB": "English (UK)",
+    "es-ES": "Spanish (Spain)",
+    "es-MX": "Spanish (Mexico)",
+    "fr-FR": "French",
+    "de-DE": "German",
+    "it-IT": "Italian",
+    "pt-BR": "Portuguese (Brazil)",
+    "ja-JP": "Japanese",
+    "ko-KR": "Korean",
+    "ru-RU": "Russian",
+    "zh-CN": "Chinese (Simplified)",
+    "hi-IN": "Hindi",
+}
+STT_LANGUAGE_CODE_MAP: dict[str, str] = {
+    "en-US": "en",
+    "en-GB": "en",
+    "es-ES": "es",
+    "es-MX": "es",
+    "fr-FR": "fr",
+    "de-DE": "de",
+    "it-IT": "it",
+    "pt-BR": "pt",
+    "ja-JP": "ja",
+    "ko-KR": "ko",
+    "ru-RU": "ru",
+    "zh-CN": "zh",
+    "hi-IN": "hi",
+}
+LANGUAGE_COPY: dict[str, dict[str, str]] = {
+    "en": {
+        "this_form": "this form",
+        "combo_question": 'For "{label}", choose one option: {options}. What should I select?',
+        "checkbox_question": 'For "{label}", should I mark yes or no?',
+        "text_question": 'What should I enter for "{label}"?',
+        "intro": 'Hi there. We are now completing "{form_name}". I will help you step by step. {question}',
+        "next_prefix": "Next, ",
+        "completed_ready": "Thank you. We have everything we need. Your completed form is ready and can be downloaded now.",
+        "completed_generating": "Thank you. We have everything we need. Your completed form is now being generated and will be ready to download shortly.",
+        "barge_in_prefix": "Got it. Let's continue. ",
+        "still_need": "I still need {label}. {question}",
+    },
+    "es": {
+        "this_form": "este formulario",
+        "combo_question": 'Para "{label}", elige una opción: {options}. ¿Cuál debo seleccionar?',
+        "checkbox_question": 'Para "{label}", ¿debo marcar sí o no?',
+        "text_question": '¿Qué debo ingresar para "{label}"?',
+        "intro": 'Hola. Ahora completaremos "{form_name}". Te ayudaré paso a paso. {question}',
+        "next_prefix": "Siguiente: ",
+        "completed_ready": "Gracias. Ya tenemos toda la información necesaria. Tu formulario completo está listo para descargar.",
+        "completed_generating": "Gracias. Ya tenemos toda la información necesaria. Tu formulario se está generando y estará listo para descargar en breve.",
+        "barge_in_prefix": "Entendido. Continuemos. ",
+        "still_need": "Todavía necesito {label}. {question}",
+    },
+    "fr": {
+        "this_form": "ce formulaire",
+        "combo_question": 'Pour "{label}", choisissez une option : {options}. Laquelle dois-je sélectionner ?',
+        "checkbox_question": 'Pour "{label}", dois-je cocher oui ou non ?',
+        "text_question": 'Que dois-je saisir pour "{label}" ?',
+        "intro": 'Bonjour. Nous allons maintenant remplir "{form_name}". Je vais vous aider étape par étape. {question}',
+        "next_prefix": "Ensuite, ",
+        "completed_ready": "Merci. Nous avons toutes les informations nécessaires. Votre formulaire rempli est prêt à être téléchargé.",
+        "completed_generating": "Merci. Nous avons toutes les informations nécessaires. Votre formulaire est en cours de génération et sera bientôt prêt au téléchargement.",
+        "barge_in_prefix": "D'accord. Continuons. ",
+        "still_need": "J'ai encore besoin de {label}. {question}",
+    },
+    "de": {
+        "this_form": "dieses Formular",
+        "combo_question": 'Für "{label}" wählen Sie bitte eine Option: {options}. Welche soll ich auswählen?',
+        "checkbox_question": 'Soll ich bei "{label}" Ja oder Nein markieren?',
+        "text_question": 'Was soll ich bei "{label}" eintragen?',
+        "intro": 'Hallo. Wir füllen jetzt "{form_name}" aus. Ich helfe Ihnen Schritt für Schritt. {question}',
+        "next_prefix": "Als Nächstes: ",
+        "completed_ready": "Danke. Wir haben alle erforderlichen Angaben. Ihr ausgefülltes Formular kann jetzt heruntergeladen werden.",
+        "completed_generating": "Danke. Wir haben alle erforderlichen Angaben. Ihr Formular wird gerade erstellt und ist in Kürze zum Download bereit.",
+        "barge_in_prefix": "Verstanden. Machen wir weiter. ",
+        "still_need": "Ich brauche noch {label}. {question}",
+    },
+    "it": {
+        "this_form": "questo modulo",
+        "combo_question": 'Per "{label}", scegli un\'opzione: {options}. Quale devo selezionare?',
+        "checkbox_question": 'Per "{label}", devo segnare sì o no?',
+        "text_question": 'Cosa devo inserire per "{label}"?',
+        "intro": 'Ciao. Ora compileremo "{form_name}". Ti aiuterò passo dopo passo. {question}',
+        "next_prefix": "Successivo: ",
+        "completed_ready": "Grazie. Abbiamo tutte le informazioni necessarie. Il modulo compilato è pronto per il download.",
+        "completed_generating": "Grazie. Abbiamo tutte le informazioni necessarie. Il modulo è in fase di generazione e sarà pronto per il download a breve.",
+        "barge_in_prefix": "Capito. Continuiamo. ",
+        "still_need": "Mi serve ancora {label}. {question}",
+    },
+    "pt": {
+        "this_form": "este formulário",
+        "combo_question": 'Para "{label}", escolha uma opção: {options}. Qual devo selecionar?',
+        "checkbox_question": 'Para "{label}", devo marcar sim ou não?',
+        "text_question": 'O que devo preencher em "{label}"?',
+        "intro": 'Olá. Agora vamos preencher "{form_name}". Vou ajudar você passo a passo. {question}',
+        "next_prefix": "Em seguida, ",
+        "completed_ready": "Obrigado. Já temos todas as informações necessárias. Seu formulário preenchido está pronto para download.",
+        "completed_generating": "Obrigado. Já temos todas as informações necessárias. Seu formulário está sendo gerado e ficará pronto para download em instantes.",
+        "barge_in_prefix": "Perfeito. Vamos continuar. ",
+        "still_need": "Ainda preciso de {label}. {question}",
+    },
+    "ja": {
+        "this_form": "このフォーム",
+        "combo_question": '「{label}」は次の中から1つ選んでください: {options}。どれを選びますか？',
+        "checkbox_question": '「{label}」は「はい」か「いいえ」のどちらにしますか？',
+        "text_question": '「{label}」には何を入力しますか？',
+        "intro": 'こんにちは。これから「{form_name}」を入力します。順番にサポートします。{question}',
+        "next_prefix": "次に、",
+        "completed_ready": "ありがとうございます。必要な情報はすべてそろいました。入力済みフォームを今すぐダウンロードできます。",
+        "completed_generating": "ありがとうございます。必要な情報はすべてそろいました。フォームを生成中です。まもなくダウンロードできます。",
+        "barge_in_prefix": "わかりました。続けましょう。",
+        "still_need": "{label} の入力がまだ必要です。{question}",
+    },
+    "ko": {
+        "this_form": "이 양식",
+        "combo_question": '"{label}" 항목은 다음 중 하나를 선택해 주세요: {options}. 어떤 것으로 선택할까요?',
+        "checkbox_question": '"{label}" 항목은 예/아니오 중 무엇으로 표시할까요?',
+        "text_question": '"{label}" 항목에 무엇을 입력할까요?',
+        "intro": '안녕하세요. 이제 "{form_name}" 작성을 시작하겠습니다. 단계별로 도와드릴게요. {question}',
+        "next_prefix": "다음으로, ",
+        "completed_ready": "감사합니다. 필요한 정보를 모두 받았습니다. 작성된 양식을 지금 다운로드할 수 있습니다.",
+        "completed_generating": "감사합니다. 필요한 정보를 모두 받았습니다. 양식을 생성 중이며 곧 다운로드할 수 있습니다.",
+        "barge_in_prefix": "알겠습니다. 계속하겠습니다. ",
+        "still_need": "{label} 항목 정보가 아직 필요합니다. {question}",
+    },
+    "ru": {
+        "this_form": "эту форму",
+        "combo_question": 'Для поля "{label}" выберите один вариант: {options}. Какой вариант выбрать?',
+        "checkbox_question": 'Для поля "{label}" отметить "да" или "нет"?',
+        "text_question": 'Что мне указать для поля "{label}"?',
+        "intro": 'Здравствуйте. Сейчас мы заполняем "{form_name}". Я помогу шаг за шагом. {question}',
+        "next_prefix": "Далее, ",
+        "completed_ready": "Спасибо. Все обязательные поля заполнены. Готовую форму можно скачать.",
+        "completed_generating": "Спасибо. Мы собрали все данные. Готовая форма сейчас формируется и скоро будет доступна для скачивания.",
+        "barge_in_prefix": "Понял. Продолжим. ",
+        "still_need": 'Мне все еще нужно значение для поля "{label}". {question}',
+    },
+    "zh": {
+        "this_form": "这份表单",
+        "combo_question": '关于“{label}”，请从以下选项中选择一项：{options}。我应该选择哪一项？',
+        "checkbox_question": '关于“{label}”，应标记“是”还是“否”？',
+        "text_question": '“{label}”这个字段我该填写什么？',
+        "intro": '你好，我们现在开始填写“{form_name}”。我会一步一步帮助你。{question}',
+        "next_prefix": "接下来，",
+        "completed_ready": "谢谢，我们已收集到所有必填信息。你现在可以下载已完成的表单。",
+        "completed_generating": "谢谢，我们已经收集完所有信息。系统正在生成已完成的表单，很快就可以下载。",
+        "barge_in_prefix": "明白了，我们继续。",
+        "still_need": "我还需要“{label}”这个字段的值。{question}",
+    },
+    "hi": {
+        "this_form": "यह फॉर्म",
+        "combo_question": '"{label}" के लिए एक विकल्प चुनें: {options}। मुझे कौन-सा विकल्प चुनना चाहिए?',
+        "checkbox_question": '"{label}" के लिए क्या मुझे हाँ या नहीं चिह्नित करना चाहिए?',
+        "text_question": '"{label}" के लिए मुझे क्या भरना चाहिए?',
+        "intro": 'नमस्ते। अब हम "{form_name}" भरेंगे। मैं आपकी चरण-दर-चरण मदद करूँगा। {question}',
+        "next_prefix": "अगला, ",
+        "completed_ready": "धन्यवाद। हमें सभी आवश्यक जानकारी मिल गई है। आपका भरा हुआ फॉर्म अब डाउनलोड के लिए तैयार है।",
+        "completed_generating": "धन्यवाद। हमें सभी आवश्यक जानकारी मिल गई है। आपका फॉर्म बन रहा है और जल्द ही डाउनलोड के लिए तैयार होगा।",
+        "barge_in_prefix": "ठीक है, आगे बढ़ते हैं। ",
+        "still_need": "मुझे अभी भी {label} चाहिए। {question}",
+    },
+}
+
+
+def _resolve_language_selection(raw_language_code: str) -> tuple[str, str]:
+    normalized = str(raw_language_code or "").strip()
+    if normalized in SUPPORTED_INTERVIEW_LANGUAGES:
+        return normalized, SUPPORTED_INTERVIEW_LANGUAGES[normalized]
+    return "en-US", SUPPORTED_INTERVIEW_LANGUAGES["en-US"]
+
+
+def _to_stt_language_code(language_code: str) -> str:
+    normalized = str(language_code or "").strip()
+    if not normalized:
+        return ""
+    if normalized in STT_LANGUAGE_CODE_MAP:
+        return STT_LANGUAGE_CODE_MAP[normalized]
+    if "-" in normalized:
+        normalized = normalized.split("-", 1)[0]
+    return normalized.lower()
 
 
 def _normalize_for_match(text: str) -> str:
-    return re.sub(r"[^a-z0-9]+", " ", text.lower()).strip()
+    return re.sub(r"[^\w]+", " ", text.lower(), flags=re.UNICODE).strip()
 
 
 def _fallback_label_from_key(field_key: str) -> str:
@@ -228,25 +412,113 @@ def _field_meta_for(session: InterviewSession, field_key: str) -> dict:
     return merged
 
 
-def _build_field_question(field_meta: dict) -> str:
-    label = str(field_meta.get("label", "")).strip() or _fallback_label_from_key(str(field_meta.get("key", "")))
+def _language_family(language_code: str) -> str:
+    return str(language_code or "").split("-", 1)[0].lower()
+
+
+def _copy_for_language(language_code: str) -> dict[str, str]:
+    family = _language_family(language_code)
+    return LANGUAGE_COPY.get(family, LANGUAGE_COPY["en"])
+
+
+def _should_localize_labels(language_code: str) -> bool:
+    return _language_family(language_code) != "en"
+
+
+def _display_label(field_meta: dict, language_code: str = "en-US") -> str:
+    if _should_localize_labels(language_code):
+        localized = str(field_meta.get("localized_label", "")).strip()
+        if localized:
+            return localized
+    return str(field_meta.get("label", "")).strip() or _fallback_label_from_key(str(field_meta.get("key", "")))
+
+
+def _localize_field_labels_with_gemini(*, field_meta: dict[str, dict], language_code: str, language_label: str) -> dict[str, str]:
+    if not field_meta or not _should_localize_labels(language_code):
+        return {}
+
+    payload_items = []
+    for key, item in field_meta.items():
+        label = str((item or {}).get("label", "")).strip() or _fallback_label_from_key(key)
+        payload_items.append({"key": key, "label": label})
+
+    if not payload_items:
+        return {}
+
+    prompt = f"""
+You are translating PDF field labels for a voice form assistant.
+Target language: "{language_label}" (BCP-47 "{language_code}").
+
+Input labels (JSON):
+{json.dumps(payload_items, ensure_ascii=False)}
+
+Return STRICT JSON:
+{{
+  "translations": [
+    {{"key": "string", "label": "string"}}
+  ]
+}}
+
+Rules:
+- Keep the same meaning as the source label.
+- Keep labels short and natural for spoken prompts.
+- Do not return empty labels.
+- Preserve field order by key mapping.
+""".strip()
+
+    response = run_gemini_json(
+        prompt=prompt,
+        response_schema={
+            "type": "object",
+            "properties": {
+                "translations": {
+                    "type": "array",
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "key": {"type": "string"},
+                            "label": {"type": "string"},
+                        },
+                        "required": ["key", "label"],
+                    },
+                }
+            },
+            "required": ["translations"],
+        },
+    )
+
+    localized: dict[str, str] = {}
+    for item in response.get("translations", []) if isinstance(response.get("translations"), list) else []:
+        if not isinstance(item, dict):
+            continue
+        key = str(item.get("key", "")).strip()
+        label = str(item.get("label", "")).strip()
+        if key in field_meta and label:
+            localized[key] = label
+    return localized
+
+
+def _build_field_question(field_meta: dict, language_code: str = "en-US") -> str:
+    label = _display_label(field_meta, language_code)
     field_type = str(field_meta.get("type", "Text")).strip()
     options = field_meta.get("options", []) if isinstance(field_meta.get("options"), list) else []
+    copy = _copy_for_language(language_code)
 
     if field_type in {"ComboBox", "RadioButton"} and options:
         options_text = ", ".join(options)
-        return f"For {label}, choose one option: {options_text}. What should I select?"
+        return copy["combo_question"].format(label=label, options=options_text)
     if field_type == "CheckBox":
-        return f"For {label}, should I mark yes or no?"
-    return f"What should I enter for {label}?"
+        return copy["checkbox_question"].format(label=label)
+    return copy["text_question"].format(label=label)
 
 
-def _build_system_prompt(form_name: str, missing_fields: list[str], field_meta: dict[str, dict]) -> str:
+def _build_system_prompt(form_name: str, missing_fields: list[str], field_meta: dict[str, dict], language_code: str, language_label: str) -> str:
     ordered_fields = json.dumps(
         [
             {
                 "key": key,
-                "label": (field_meta.get(key) or {}).get("label", _fallback_label_from_key(key)),
+                "label": _display_label(field_meta.get(key) or {}, language_code),
+                "english_label": (field_meta.get(key) or {}).get("label", _fallback_label_from_key(key)),
                 "type": (field_meta.get(key) or {}).get("type", "Text"),
                 "options": (field_meta.get(key) or {}).get("options", []),
             }
@@ -256,29 +528,32 @@ def _build_system_prompt(form_name: str, missing_fields: list[str], field_meta: 
     return (
         "You are a voice assistant helping the user fill a form.\n"
         f'Form title: "{form_name or "Untitled form"}"\n'
+        f'Assistant response language: "{language_label}" (BCP-47 code "{language_code}").\n'
         f"Required fields in strict order: {ordered_fields}\n"
         "Rules:\n"
         "1) Ask for exactly one missing field at a time, in order.\n"
-        "2) Use only user-facing labels, never technical keys.\n"
+        "2) Use only user-facing labels from \"label\", never technical keys.\n"
         "3) For ComboBox/RadioButton fields, ask user to choose one valid option.\n"
         "4) For CheckBox fields, ask yes/no.\n"
         "5) If answer is adequate, acknowledge and move to the next field.\n"
         "6) If answer is unclear/incomplete, ask a concise clarification for that same field.\n"
         "7) If user interrupts, briefly acknowledge and steer back to current field.\n"
-        "8) Never request fields outside the required list."
+        "8) Never request fields outside the required list.\n"
+        f'9) All spoken assistant responses must be in "{language_label}".\n'
+        "10) normalized_value must be English for form filling (translate or transliterate when needed)."
     )
 
 
-def _build_first_prompt(form_name: str, first_field_meta: dict) -> str:
-    return (
-        f'Hi there. We are now completing "{form_name or "this form"}". '
-        "I will help you step by step. "
-        + _build_field_question(first_field_meta)
-    )
+def _build_first_prompt(form_name: str, first_field_meta: dict, language_code: str = "en-US") -> str:
+    copy = _copy_for_language(language_code)
+    question = _build_field_question(first_field_meta, language_code)
+    form_title = form_name or copy["this_form"]
+    return copy["intro"].format(form_name=form_title, question=question)
 
 
-def _build_next_field_prompt(next_field_meta: dict) -> str:
-    return "Next, " + _build_field_question(next_field_meta)
+def _build_next_field_prompt(next_field_meta: dict, language_code: str = "en-US") -> str:
+    copy = _copy_for_language(language_code)
+    return copy["next_prefix"] + _build_field_question(next_field_meta, language_code)
 
 
 def _mentions_field_label(text: str, field_label: str) -> bool:
@@ -295,10 +570,10 @@ def _mentions_field_label(text: str, field_label: str) -> bool:
     return overlap >= max(2, min(3, len(field_tokens)))
 
 
-def _ensure_next_question(*, assistant_response: str, next_field_meta: dict) -> str:
+def _ensure_next_question(*, assistant_response: str, next_field_meta: dict, language_code: str = "en-US") -> str:
     response = assistant_response.strip()
-    next_prompt = _build_next_field_prompt(next_field_meta)
-    next_label = str(next_field_meta.get("label", "")).strip()
+    next_prompt = _build_next_field_prompt(next_field_meta, language_code)
+    next_label = _display_label(next_field_meta, language_code)
     if not response:
         return next_prompt
     if "?" in response or _mentions_field_label(response, next_label):
@@ -311,8 +586,51 @@ def _ensure_next_question(*, assistant_response: str, next_field_meta: dict) -> 
 
 def _coerce_checkbox_value(value: str) -> str:
     normalized = _normalize_for_match(value)
-    yes_tokens = {"yes", "y", "true", "checked", "check", "mark yes", "affirmative", "consent"}
-    no_tokens = {"no", "n", "false", "unchecked", "uncheck", "mark no", "decline", "do not consent"}
+    yes_tokens = {
+        "yes",
+        "y",
+        "true",
+        "checked",
+        "check",
+        "mark yes",
+        "affirmative",
+        "consent",
+        "si",
+        "sí",
+        "oui",
+        "ja",
+        "sim",
+        "hai",
+        "はい",
+        "예",
+        "да",
+        "shi",
+        "是",
+        "haan",
+        "हाँ",
+    }
+    no_tokens = {
+        "no",
+        "n",
+        "false",
+        "unchecked",
+        "uncheck",
+        "mark no",
+        "decline",
+        "do not consent",
+        "non",
+        "nein",
+        "nao",
+        "não",
+        "iie",
+        "いいえ",
+        "아니요",
+        "нет",
+        "bu",
+        "不是",
+        "nahin",
+        "नहीं",
+    }
     if normalized in yes_tokens:
         return "Yes"
     if normalized in no_tokens:
@@ -449,21 +767,24 @@ def _evaluate_turn_with_gemini(
     missing_fields: list[dict],
     answers: dict[str, str],
     was_interruption: bool,
+    language_code: str,
+    language_label: str,
 ) -> dict:
-    current_label = str(current_field_meta.get("label", "")).strip() or _fallback_label_from_key(current_field)
+    current_label = _display_label(current_field_meta, language_code)
     current_type = str(current_field_meta.get("type", "Text")).strip() or "Text"
     current_options = current_field_meta.get("options", []) if isinstance(current_field_meta.get("options"), list) else []
     next_label = ""
     next_type = ""
     next_options: list[str] = []
     if isinstance(next_field_meta, dict):
-        next_label = str(next_field_meta.get("label", "")).strip()
+        next_label = _display_label(next_field_meta, language_code)
         next_type = str(next_field_meta.get("type", "")).strip()
         next_options = next_field_meta.get("options", []) if isinstance(next_field_meta.get("options"), list) else []
 
     prompt = f"""
 You are validating one turn in a voice form interview.
 Form title: "{form_name or "Untitled form"}"
+Required assistant response language: "{language_label}" (BCP-47 code "{language_code}")
 
 Current field technical key (internal only): "{current_field}"
 Current field label (speak this): "{current_label}"
@@ -488,6 +809,9 @@ Return STRICT JSON:
 Rules:
 - Mark as adequate ONLY when user clearly provided the value for the current field label.
 - Never speak or repeat the technical key; always use the label.
+- normalized_value is what will be written into the PDF and it must be English.
+- If user speaks a non-English value, translate to natural English when possible.
+- For names/addresses/proper nouns in non-Latin scripts, transliterate to Latin characters.
 - For ComboBox/RadioButton fields with options, normalized_value must be one of the allowed options exactly.
 - For CheckBox fields, normalized_value must be "Yes" or "No" unless a different allowed option is listed.
 - If unclear, off-topic, partial, or ambiguous, mark inadequate and ask clarification.
@@ -499,6 +823,7 @@ Rules:
   - do not output very short fragments; never output just the field name or "X?".
 - Never ask for multiple fields at once.
 - Never invent field names.
+- assistant_response must be entirely in "{language_label}".
 """.strip()
 
     response = run_gemini_json(
@@ -533,6 +858,8 @@ def _evaluate_and_update_session(
     user_input: str,
     was_interruption: bool,
 ) -> dict:
+    copy = _copy_for_language(session.language_code)
+
     if session.completed:
         return {
             "session_id": session.session_id,
@@ -540,19 +867,18 @@ def _evaluate_and_update_session(
             "current_field": None,
             "missing_fields": [],
             "answers": session.answers,
+            "language_code": session.language_code,
+            "language_label": session.language_label,
             "intent": "acknowledgment",
             "is_answer_adequate": True,
-            "assistant_response": (
-                "Thank you. We have everything we need. "
-                "Your completed form is ready and can be downloaded now."
-            ),
+            "assistant_response": copy["completed_ready"],
         }
 
     current_field = session.current_field
     if not current_field:
         raise RuntimeError("No active field in session.")
     current_field_meta = _field_meta_for(session, current_field)
-    current_label = str(current_field_meta.get("label", "")).strip() or _fallback_label_from_key(current_field)
+    current_label = _display_label(current_field_meta, session.language_code)
     next_field_meta = None
     if len(session.missing_fields) > 1:
         next_field_key = session.missing_fields[1]
@@ -576,7 +902,7 @@ def _evaluate_and_update_session(
         missing_fields=[
             {
                 "key": key,
-                "label": _field_meta_for(session, key).get("label", _fallback_label_from_key(key)),
+                "label": _display_label(_field_meta_for(session, key), session.language_code),
                 "type": _field_meta_for(session, key).get("type", "Text"),
                 "options": _field_meta_for(session, key).get("options", []),
             }
@@ -584,6 +910,8 @@ def _evaluate_and_update_session(
         ],
         answers=session.answers,
         was_interruption=was_interruption,
+        language_code=session.language_code,
+        language_label=session.language_label,
     )
 
     intent = str(evaluation.get("intent", "clarification"))
@@ -601,21 +929,22 @@ def _evaluate_and_update_session(
         session.updated_at = datetime.now(timezone.utc).isoformat()
 
         if session.completed:
-            assistant_response = assistant_response or (
-                "Thank you. We have everything we need. "
-                "Your completed form is now being generated and will be ready to download shortly."
-            )
+            if not assistant_response:
+                assistant_response = copy["completed_generating"]
         else:
             next_field = session.current_field or "the next field"
             next_field_meta = _field_meta_for(session, next_field)
-            assistant_response = assistant_response or _build_next_field_prompt(next_field_meta)
+            assistant_response = assistant_response or _build_next_field_prompt(next_field_meta, session.language_code)
     else:
         session.updated_at = datetime.now(timezone.utc).isoformat()
         if not assistant_response:
             if intent == "barge_in":
-                assistant_response = f"Got it. Let's continue. {_build_field_question(current_field_meta)}"
+                assistant_response = f'{copy["barge_in_prefix"]}{_build_field_question(current_field_meta, session.language_code)}'
             else:
-                assistant_response = f"I still need {current_label}. {_build_field_question(current_field_meta)}"
+                assistant_response = copy["still_need"].format(
+                    label=current_label,
+                    question=_build_field_question(current_field_meta, session.language_code),
+                )
 
     logger.info(
         "Interview turn evaluated agent_id=%s session_id=%s intent=%s adequate=%s completed=%s next_field=%s",
@@ -633,6 +962,8 @@ def _evaluate_and_update_session(
         "current_field": session.current_field,
         "missing_fields": session.missing_fields,
         "answers": session.answers,
+        "language_code": session.language_code,
+        "language_label": session.language_label,
         "intent": intent,
         "is_answer_adequate": is_answer_adequate,
         "assistant_response": assistant_response,
@@ -687,17 +1018,18 @@ def _synthesize_with_elevenlabs(text: str) -> tuple[bytes, str]:
     return response.content, "audio/mpeg"
 
 
-def _transcribe_with_elevenlabs(*, audio_bytes: bytes, filename: str, content_type: str) -> str:
+def _transcribe_with_elevenlabs(*, audio_bytes: bytes, filename: str, content_type: str, language_code: str = "") -> str:
     api_key = os.getenv("ELEVENLABS_API_KEY", "").strip()
     stt_model = os.getenv("ELEVENLABS_STT_MODEL", "scribe_v1").strip()
-    language_code = os.getenv("ELEVENLABS_STT_LANGUAGE", "").strip()
+    fallback_language_code = os.getenv("ELEVENLABS_STT_LANGUAGE", "").strip()
+    selected_language_code = _to_stt_language_code(language_code) or fallback_language_code
 
     if not api_key:
         raise RuntimeError("Missing ELEVENLABS_API_KEY.")
 
     data: dict[str, str] = {"model_id": stt_model}
-    if language_code:
-        data["language_code"] = language_code
+    if selected_language_code:
+        data["language_code"] = selected_language_code
 
     response = requests.post(
         f"{ELEVENLABS_API_BASE}/speech-to-text",
@@ -735,6 +1067,14 @@ def start_interview(agent_id: str) -> tuple:
     normalized_fields = [key for key in field_meta.keys() if str(key).strip()]
     form_name = str(agent.get("agent_name", "")).strip() or "this form"
 
+    data = request.get_json(silent=True) if request.is_json else None
+    if data is None:
+        data = {}
+    if not isinstance(data, dict):
+        return jsonify({"error": "Invalid JSON body"}), 400
+
+    selected_language_code, selected_language_label = _resolve_language_selection(str(data.get("language_code", "")).strip())
+
     session_id = uuid.uuid4().hex[:12]
     session = InterviewSession(
         session_id=session_id,
@@ -742,7 +1082,29 @@ def start_interview(agent_id: str) -> tuple:
         missing_fields=normalized_fields,
         form_name=form_name,
         field_meta=field_meta,
+        language_code=selected_language_code,
+        language_label=selected_language_label,
     )
+
+    if _should_localize_labels(session.language_code):
+        try:
+            localized_labels = _localize_field_labels_with_gemini(
+                field_meta=session.field_meta,
+                language_code=session.language_code,
+                language_label=session.language_label,
+            )
+            for key, localized_label in localized_labels.items():
+                entry = session.field_meta.get(key)
+                if isinstance(entry, dict) and localized_label:
+                    entry["localized_label"] = localized_label
+        except Exception as exc:
+            logger.warning(
+                "Could not localize field labels for session %s language=%s: %s",
+                session_id,
+                session.language_code,
+                exc,
+            )
+
     SESSIONS[session_id] = session
 
     first_field = session.current_field or "the first field"
@@ -756,8 +1118,12 @@ def start_interview(agent_id: str) -> tuple:
                 "missing_fields": session.missing_fields,
                 "answers": session.answers,
                 "completed": session.completed,
-                "system_prompt": _build_system_prompt(session.form_name, session.missing_fields, session.field_meta),
-                "first_prompt": _build_first_prompt(session.form_name, first_field_meta),
+                "language_code": session.language_code,
+                "language_label": session.language_label,
+                "system_prompt": _build_system_prompt(
+                    session.form_name, session.missing_fields, session.field_meta, session.language_code, session.language_label
+                ),
+                "first_prompt": _build_first_prompt(session.form_name, first_field_meta, session.language_code),
             }
         ),
         200,
@@ -862,6 +1228,7 @@ def process_interview_turn_audio(agent_id: str) -> tuple:
             audio_bytes=audio_bytes,
             filename=audio_file.filename or "turn_audio.webm",
             content_type=audio_file.mimetype or "audio/webm",
+            language_code=session.language_code,
         )
         if not transcript:
             return jsonify({"error": "No speech detected in audio. Please try again."}), 400
@@ -884,6 +1251,8 @@ def process_interview_turn_audio(agent_id: str) -> tuple:
         result["user_transcript"] = transcript
         result["audio_mime_type"] = audio_mime_type
         result["audio_base64"] = audio_base64
+        result["language_code"] = session.language_code
+        result["language_label"] = session.language_label
         return jsonify(result), 200
     except GeminiAuthError as exc:
         logger.warning("Interview audio turn blocked by Gemini auth issue: %s", exc)

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { API_BASE_URL, getAgentById, speakInterviewText, startGuidedInterview, submitInterviewAudioTurn } from '../services/api'
+import { API_BASE_URL, getAgentById, getAgentLivePreviewPdf, speakInterviewText, startGuidedInterview, submitInterviewAudioTurn } from '../services/api'
+import { useI18n } from '../i18n/I18nProvider'
+import { normalizeLanguageCode, SUPPORTED_LANGUAGES } from '../i18n/languages'
 
 const MIN_RECORDING_MS = 500
 const INTERVIEW_TURN_RESPONSE_SCHEMA = {
@@ -40,7 +42,7 @@ function createRecorder(stream) {
   return new MediaRecorder(stream)
 }
 
-function toMicSetupError(err) {
+function toMicSetupError(err, t) {
   const isLocalhost =
     window.location.hostname === 'localhost' ||
     window.location.hostname === '127.0.0.1' ||
@@ -50,22 +52,22 @@ function toMicSetupError(err) {
   const rawMessage = err instanceof Error ? err.message : ''
 
   if (secureContextError || errName === 'SecurityError') {
-    return 'Microphone access requires HTTPS (or localhost). Open this app on localhost or enable HTTPS.'
+    return t('err_mic_https')
   }
   if (errName === 'NotAllowedError' || /denied|not allowed/i.test(rawMessage)) {
-    return 'Microphone permission was blocked. Click the lock icon in your browser and allow microphone access, then try again.'
+    return t('err_mic_permission')
   }
   if (errName === 'NotFoundError') {
-    return 'No microphone was found on this device. Connect a microphone and try again.'
+    return t('err_mic_not_found')
   }
   if (errName === 'NotReadableError') {
-    return 'Microphone is currently in use by another app. Close other apps using the mic and try again.'
+    return t('err_mic_in_use')
   }
   if (errName === 'AbortError') {
-    return 'Microphone initialization was interrupted. Please try again.'
+    return t('err_mic_abort')
   }
 
-  return rawMessage || 'We could not start the interview yet. Please check microphone permission and try again.'
+  return rawMessage || t('err_mic_default')
 }
 
 function formatAgentToken(agentId) {
@@ -77,6 +79,7 @@ function formatAgentToken(agentId) {
 }
 
 export default function AgentPage() {
+  const { t, uiLanguage, setUiLanguage } = useI18n()
   const { id } = useParams()
 
   const interviewSessionIdRef = useRef('')
@@ -89,6 +92,7 @@ export default function AgentPage() {
   const completionLoggedRef = useRef(false)
   const recordingInterruptionRef = useRef(false)
   const activeAudioRef = useRef(null)
+  const livePreviewRequestRef = useRef(0)
 
   const toneContextRef = useRef(null)
   const toneNodesRef = useRef(null)
@@ -102,6 +106,13 @@ export default function AgentPage() {
   const [error, setError] = useState('')
   const [interviewState, setInterviewState] = useState(null)
   const [showEndConfirm, setShowEndConfirm] = useState(false)
+  const [interviewLanguage, setInterviewLanguage] = useState(normalizeLanguageCode(uiLanguage))
+  const [livePreviewEnabled, setLivePreviewEnabled] = useState(false)
+  const [livePreviewLoading, setLivePreviewLoading] = useState(false)
+  const [livePreviewUrl, setLivePreviewUrl] = useState('')
+  const [chatModeEnabled, setChatModeEnabled] = useState(false)
+  const [lastUserSubtitle, setLastUserSubtitle] = useState('')
+  const [lastAssistantSubtitle, setLastAssistantSubtitle] = useState('')
 
   const stopThinkingTone = () => {
     const nodes = toneNodesRef.current
@@ -217,7 +228,7 @@ export default function AgentPage() {
       }
       audio.onerror = () => {
         cleanup()
-        reject(new Error('Could not play assistant audio.'))
+        reject(new Error(t('err_no_audio')))
       }
       audio.play().catch((err) => {
         cleanup()
@@ -264,7 +275,7 @@ export default function AgentPage() {
   }
 
   const handleTurnError = async (err) => {
-    const message = err instanceof Error ? err.message : 'I had trouble understanding that. Please try once more.'
+    const message = err instanceof Error ? err.message : t('err_turn_generic')
     const errorCode = typeof err === 'object' && err && 'code' in err ? String(err.code || '') : ''
     const statusCode = typeof err === 'object' && err && 'status' in err ? Number(err.status) : 0
 
@@ -272,7 +283,7 @@ export default function AgentPage() {
     const rateLimited = errorCode === 'GEMINI_RATE_LIMIT' || statusCode === 429 || /rate limit|resource exhausted|quota/i.test(message)
 
     if (authIssue) {
-      setError('Gemini key is invalid/expired. Update GEMINI_API_KEY, restart backend, then start interview again.')
+      setError(t('err_gemini_auth'))
       setMicOn(false)
       setMode('idle')
       setStatus('error')
@@ -280,7 +291,7 @@ export default function AgentPage() {
     }
 
     if (rateLimited) {
-      setError('Gemini is rate-limited right now. Wait a few seconds, then keep answering.')
+      setError(t('err_gemini_rate'))
       setStatus('connected')
       return
     }
@@ -292,7 +303,7 @@ export default function AgentPage() {
   const submitRecordedTurn = async (audioBlob, wasInterruption) => {
     const sessionId = interviewSessionIdRef.current
     if (!sessionId) {
-      setError('Interview session is not ready. Please restart the interview.')
+      setError(t('err_session_not_ready'))
       return
     }
 
@@ -308,6 +319,8 @@ export default function AgentPage() {
       })
 
       setInterviewState(result)
+      setLastUserSubtitle(String(result.user_transcript || '').trim())
+      setLastAssistantSubtitle(String(result.assistant_response || '').trim())
 
       if (result.audio_base64) {
         await playAssistantAudio(result.audio_mime_type, result.audio_base64, { completed: Boolean(result.completed) })
@@ -340,7 +353,7 @@ export default function AgentPage() {
 
     const stream = mediaStreamRef.current
     if (!stream) {
-      setError('Microphone stream is not available. Restart interview.')
+      setError(t('err_mic_stream_missing'))
       return
     }
 
@@ -370,14 +383,14 @@ export default function AgentPage() {
       chunksRef.current = []
 
       if (durationMs < MIN_RECORDING_MS) {
-        setError('Hold the mic a little longer before releasing.')
+        setError(t('err_hold_longer'))
         setStatus('connected')
         setMode('listening')
         return
       }
 
       if (!audioBlob.size) {
-        setError('No audio captured. Please try again.')
+        setError(t('err_no_audio'))
         setStatus('connected')
         setMode('listening')
         return
@@ -414,6 +427,15 @@ export default function AgentPage() {
   }
 
   const endInterview = () => {
+    livePreviewRequestRef.current += 1
+    setLivePreviewEnabled(false)
+    setLivePreviewLoading(false)
+    setLivePreviewUrl((current) => {
+      if (current?.startsWith('blob:')) {
+        URL.revokeObjectURL(current)
+      }
+      return ''
+    })
     setShowEndConfirm(false)
     teardownSessionMedia()
     setMode('idle')
@@ -430,6 +452,17 @@ export default function AgentPage() {
     setMode('idle')
     setMicOn(false)
     setInterviewState(null)
+    setLivePreviewLoading(false)
+    setLastUserSubtitle('')
+    setLastAssistantSubtitle('')
+    if (!livePreviewEnabled) {
+      setLivePreviewUrl((current) => {
+        if (current?.startsWith('blob:')) {
+          URL.revokeObjectURL(current)
+        }
+        return ''
+      })
+    }
     setShowEndConfirm(false)
     completionLoggedRef.current = false
     interviewSessionIdRef.current = ''
@@ -438,15 +471,22 @@ export default function AgentPage() {
       await ensureToneContext()
 
       if (!navigator.mediaDevices?.getUserMedia) {
-        throw new Error('This browser does not support microphone capture.')
+        throw new Error(t('err_browser_no_mic'))
       }
 
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
       mediaStreamRef.current = stream
 
-      const guided = await startGuidedInterview(id)
+      const guided = await startGuidedInterview(id, { language_code: interviewLanguage })
       interviewSessionIdRef.current = guided.session_id
       setInterviewState(guided)
+      setLastUserSubtitle('')
+      setLastAssistantSubtitle(String(guided.first_prompt || '').trim())
+      if (guided?.language_code) {
+        const normalized = normalizeLanguageCode(guided.language_code)
+        setInterviewLanguage(normalized)
+        setUiLanguage(normalized)
+      }
 
       setStage('active')
       setStatus('connected')
@@ -457,7 +497,7 @@ export default function AgentPage() {
     } catch (err) {
       teardownSessionMedia()
       setStatus('error')
-      setError(toMicSetupError(err))
+      setError(toMicSetupError(err, t))
       setStage('welcome')
     }
   }
@@ -490,7 +530,7 @@ export default function AgentPage() {
         setAgent(payload)
       } catch {
         if (!isMounted) return
-        setError('We could not open this interview link right now.')
+        setError(t('err_interview_open'))
       } finally {
         if (isMounted) setLoading(false)
       }
@@ -500,6 +540,7 @@ export default function AgentPage() {
 
     return () => {
       isMounted = false
+      livePreviewRequestRef.current += 1
       teardownSessionMedia()
       if (toneContextRef.current) {
         toneContextRef.current.close().catch(() => {})
@@ -515,6 +556,64 @@ export default function AgentPage() {
     }
     stopThinkingTone()
   }, [status])
+
+  useEffect(() => {
+    if (stage !== 'welcome') return
+    setInterviewLanguage(normalizeLanguageCode(uiLanguage))
+  }, [stage, uiLanguage])
+
+  useEffect(() => {
+    return () => {
+      if (livePreviewUrl?.startsWith('blob:')) {
+        URL.revokeObjectURL(livePreviewUrl)
+      }
+    }
+  }, [livePreviewUrl])
+
+  const refreshLivePreview = async (answers = {}) => {
+    const requestId = livePreviewRequestRef.current + 1
+    livePreviewRequestRef.current = requestId
+    setLivePreviewLoading(true)
+    try {
+      const previewBlob = await getAgentLivePreviewPdf(id, answers)
+      const objectUrl = URL.createObjectURL(previewBlob)
+      if (livePreviewRequestRef.current !== requestId) {
+        URL.revokeObjectURL(objectUrl)
+        return
+      }
+      setLivePreviewUrl((current) => {
+        if (current?.startsWith('blob:')) {
+          URL.revokeObjectURL(current)
+        }
+        return objectUrl
+      })
+    } catch (err) {
+      if (livePreviewRequestRef.current !== requestId) return
+      const message = err instanceof Error ? err.message : t('err_preview_refresh')
+      setError(message)
+    } finally {
+      if (livePreviewRequestRef.current === requestId) {
+        setLivePreviewLoading(false)
+      }
+    }
+  }
+
+  useEffect(() => {
+    if (!livePreviewEnabled || stage !== 'active') return
+    void refreshLivePreview(interviewState?.answers || {})
+  }, [id, interviewState?.answers, livePreviewEnabled, stage])
+
+  useEffect(() => {
+    if (livePreviewEnabled) return
+    livePreviewRequestRef.current += 1
+    setLivePreviewLoading(false)
+    setLivePreviewUrl((current) => {
+      if (current?.startsWith('blob:')) {
+        URL.revokeObjectURL(current)
+      }
+      return ''
+    })
+  }, [livePreviewEnabled])
 
   useEffect(() => {
     if (!interviewState?.completed || completionLoggedRef.current) return
@@ -540,22 +639,22 @@ export default function AgentPage() {
   }, [orbState])
 
   const orbCaption = useMemo(() => {
-    if (interviewState?.completed) return 'All required fields are captured. You can end this session.'
-    if (status === 'connecting') return 'Preparing your interview...'
-    if (status === 'processing') return 'Thinking...'
-    if (mode === 'speaking') return 'Assistant is speaking now.'
-    if (status === 'recording') return 'Recording... release to send.'
-    return 'Hold the microphone button to talk. Release to send.'
-  }, [interviewState, mode, status])
+    if (interviewState?.completed) return t('agent_orb_completed')
+    if (status === 'connecting') return t('agent_orb_connecting')
+    if (status === 'processing') return t('agent_orb_thinking')
+    if (mode === 'speaking') return t('agent_orb_speaking')
+    if (status === 'recording') return t('agent_orb_recording')
+    return t('agent_orb_ready')
+  }, [interviewState, mode, status, t])
 
   const stateLabel = useMemo(() => {
-    if (status === 'recording') return 'Recording'
-    if (status === 'processing') return 'Thinking'
-    if (mode === 'speaking') return 'Speaking'
-    if (status === 'connecting') return 'Connecting'
-    if (status === 'error') return 'Error'
-    return 'Ready'
-  }, [mode, status])
+    if (status === 'recording') return t('agent_state_recording')
+    if (status === 'processing') return t('agent_state_thinking')
+    if (mode === 'speaking') return t('agent_state_speaking')
+    if (status === 'connecting') return t('agent_state_connecting')
+    if (status === 'error') return t('agent_state_error')
+    return t('agent_state_ready')
+  }, [mode, status, t])
 
   const stateClass = useMemo(() => {
     if (status === 'recording') return 'recording'
@@ -570,8 +669,8 @@ export default function AgentPage() {
     return (
       <main className="agentShell gateShell">
         <section className="gateCard">
-          <p className="eyebrow">Preparing Session</p>
-          <h1>Loading your secure interview link...</h1>
+          <p className="eyebrow">{t('agent_loading_eyebrow')}</p>
+          <h1>{t('agent_loading_title')}</h1>
         </section>
       </main>
     )
@@ -581,9 +680,9 @@ export default function AgentPage() {
     return (
       <main className="agentShell gateShell">
         <section className="gateCard">
-          <p className="eyebrow">Link Error</p>
-          <h1>This interview link is unavailable</h1>
-          <p className="error">{error || 'Agent not found.'}</p>
+          <p className="eyebrow">{t('agent_link_error_eyebrow')}</p>
+          <h1>{t('agent_link_error_title')}</h1>
+          <p className="error">{error || t('agent_not_found')}</p>
         </section>
       </main>
     )
@@ -601,21 +700,42 @@ export default function AgentPage() {
                 <span className="wordmarkText">ai</span>
               </Link>
               <Link className="backLandingLink" to="/">
-                Back to landing
+                {t('agent_back_landing')}
               </Link>
             </div>
           </div>
           <div className="gateHero">
-            <p className="eyebrow">Secure Intake</p>
             <div className="gateTitleRow">
-              <h1 className="gateFormTitle">{agent.agent_name?.trim() || 'Untitled Form'}</h1>
+              <h1 className="gateFormTitle">{agent.agent_name?.trim() || t('agent_untitled_form')}</h1>
               <span className="gateFormToken" aria-label={`Form ID ${agent.agent_id}`}>
-                ID {formatAgentToken(agent.agent_id)}
+                {formatAgentToken(agent.agent_id)}
               </span>
             </div>
-            <p className="heroText gateHeroText">Start your guided voice interview when you are ready.</p>
+            <p className="heroText gateHeroText">{t('agent_gate_text')}</p>
+            <div className="interviewLanguageControl">
+              <label className="interviewLanguageLabel" htmlFor="interview-language-select">
+                {t('agent_interview_language')}
+              </label>
+              <select
+                id="interview-language-select"
+                className="interviewLanguageSelect"
+                value={interviewLanguage}
+                onChange={(event) => {
+                  const nextLanguage = normalizeLanguageCode(event.target.value)
+                  setInterviewLanguage(nextLanguage)
+                  setUiLanguage(nextLanguage)
+                }}
+                disabled={status === 'connecting'}
+              >
+                {SUPPORTED_LANGUAGES.map((language) => (
+                  <option key={language.code} value={language.code}>
+                    {language.label}
+                  </option>
+                ))}
+              </select>
+            </div>
             <button type="button" className="startPulseButton" onClick={startInterview} disabled={status === 'connecting'}>
-              {status === 'connecting' ? 'Requesting microphone...' : 'Start My Interview'}
+              {status === 'connecting' ? t('agent_requesting_mic') : t('agent_start_interview')}
             </button>
             {error ? <p className="error">{error}</p> : null}
           </div>
@@ -625,79 +745,154 @@ export default function AgentPage() {
   }
 
   return (
-    <main className="agentShell activeShell">
-      <section className="orbStage">
-        <p className="orbEyebrow">Your Form Assistant</p>
-        <p className={`statusPill ${stateClass}`}>{stateLabel}</p>
-        <div className={`orb ${orbState}`} style={{ '--orb-scale': orbScale }}>
-          <div className="orbCore"></div>
+    <main className={`agentShell activeShell ${livePreviewEnabled ? 'activeShellSplit' : ''}`}>
+      <header className="agentSessionBar">
+        <div className="agentSessionMeta">
+          <p className="orbEyebrow">{t('agent_form_assistant')}</p>
+          <p className="agentSessionTitle">{agent.agent_name?.trim() || t('agent_untitled_form')}</p>
+          <p className="agentSessionId">{formatAgentToken(agent.agent_id)}</p>
         </div>
-        <p className="orbCaption">{orbCaption}</p>
+        <div className="agentModeToggles">
+          <label className="miniToggle">
+            <input
+              type="checkbox"
+              checked={chatModeEnabled}
+              onChange={(event) => setChatModeEnabled(event.target.checked)}
+              disabled={status === 'connecting'}
+            />
+            <span className="miniToggleTrack" aria-hidden="true"></span>
+            <span className="miniToggleLabel">{t('agent_toggle_chat')}</span>
+          </label>
+          <label className="miniToggle">
+            <input
+              type="checkbox"
+              checked={livePreviewEnabled}
+              onChange={(event) => setLivePreviewEnabled(event.target.checked)}
+              disabled={status === 'connecting'}
+            />
+            <span className="miniToggleTrack" aria-hidden="true"></span>
+            <span className="miniToggleLabel">{t('agent_toggle_live_pdf')}</span>
+          </label>
+        </div>
+      </header>
+
+      <section className="activeLayoutGrid">
+        <section className="voicePanel">
+          <section className="orbStage">
+            <p className={`statusPill ${stateClass}`}>{stateLabel}</p>
+            <div className={`orb ${orbState}`} style={{ '--orb-scale': orbScale }}>
+              <div className="orbCore"></div>
+            </div>
+            <p className="orbCaption">{orbCaption}</p>
+          </section>
+
+          {chatModeEnabled ? (
+            <section className="subtitleCard" aria-label="Chat subtitles">
+              <p className="paneLabel">{t('agent_subtitles_title')}</p>
+              {lastUserSubtitle ? (
+                <p className="subtitleLine">
+                  <span>{t('agent_subtitle_user')}</span> {lastUserSubtitle}
+                </p>
+              ) : null}
+              {lastAssistantSubtitle ? (
+                <p className="subtitleLine">
+                  <span>{t('agent_subtitle_assistant')}</span> {lastAssistantSubtitle}
+                </p>
+              ) : (
+                <p className="hint">{t('agent_subtitle_hint')}</p>
+              )}
+              <div className="waitingSoundPlaceholder" aria-label="Waiting sound placeholder">
+                <p className="paneLabel">{t('agent_waiting_sound')}</p>
+                <p className="hint">{t('agent_waiting_placeholder')}</p>
+              </div>
+            </section>
+          ) : null}
+
+          <footer className="voiceFooter">
+            {interviewState?.completed ? (
+              <div className="completionActions">
+                {interviewState?.download_url ? (
+                  <a className="btnPrimary btnLink" href={toApiAbsoluteUrl(interviewState.download_url)} target="_blank" rel="noreferrer">
+                    {t('agent_download_completed')}
+                  </a>
+                ) : null}
+                {interviewState?.pdf_preview_url ? (
+                  <a className="btnGhost btnLink" href={toApiAbsoluteUrl(interviewState.pdf_preview_url)} target="_blank" rel="noreferrer">
+                    {t('agent_preview_completed')}
+                  </a>
+                ) : null}
+                <button type="button" className="endSessionTextButton" onClick={() => setShowEndConfirm(true)}>
+                  {t('agent_end_session')}
+                </button>
+              </div>
+            ) : (
+              <div className="micStack">
+                <button
+                  type="button"
+                  className={`micHoldButton ${micOn ? 'active' : ''}`}
+                  onPointerDown={handleHoldStart}
+                  onPointerUp={handleHoldEnd}
+                  onPointerLeave={handleHoldEnd}
+                  onPointerCancel={handleHoldEnd}
+                  onContextMenu={(event) => event.preventDefault()}
+                  disabled={
+                    Boolean(interviewState?.completed) ||
+                    status === 'processing' ||
+                    status === 'connecting' ||
+                    status === 'error' ||
+                    status === 'speaking' ||
+                    mode === 'speaking'
+                  }
+                  aria-label={t('agent_hold_talk')}
+                >
+                  <svg className="micGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                    <path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 1 0-8 0v4a4 4 0 0 0 4 4Zm-6-4a1 1 0 0 1 2 0 4 4 0 0 0 8 0 1 1 0 1 1 2 0 6 6 0 0 1-5 5.91V20h2a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2h2v-3.09A6 6 0 0 1 6 11Z" />
+                  </svg>
+                </button>
+                <p className="micHint">{t('agent_hold_talk')}</p>
+                <button type="button" className="endSessionTextButton" onClick={() => setShowEndConfirm(true)}>
+                  {t('agent_end_session')}
+                </button>
+              </div>
+            )}
+
+            {error ? <p className="error">{error}</p> : null}
+          </footer>
+        </section>
+
+        {livePreviewEnabled ? (
+          <aside className="livePreviewSide">
+            <section className="livePreviewCard">
+              <div className="livePreviewHeader">
+                <p className="paneLabel">{t('agent_live_pdf_preview')}</p>
+                <span className="livePreviewState">{livePreviewLoading ? t('agent_live_pdf_updating') : t('agent_live_pdf_readonly')}</span>
+              </div>
+              {livePreviewUrl ? (
+                <iframe
+                  title={t('agent_live_pdf_preview')}
+                  src={`${livePreviewUrl}#toolbar=1&navpanes=0`}
+                  className="talkingPdfFrame"
+                />
+              ) : (
+                <p className="hint">{t('agent_live_pdf_preparing')}</p>
+              )}
+            </section>
+          </aside>
+        ) : null}
       </section>
 
-      <footer className="voiceFooter">
-        {interviewState?.completed ? (
-          <div className="completionActions">
-            {interviewState?.download_url ? (
-              <a className="btnPrimary btnLink" href={toApiAbsoluteUrl(interviewState.download_url)} target="_blank" rel="noreferrer">
-                Download Completed Form
-              </a>
-            ) : null}
-            {interviewState?.pdf_preview_url ? (
-              <a className="btnGhost btnLink" href={toApiAbsoluteUrl(interviewState.pdf_preview_url)} target="_blank" rel="noreferrer">
-                Preview Completed Form
-              </a>
-            ) : null}
-            <button type="button" className="endSessionTextButton" onClick={() => setShowEndConfirm(true)}>
-              End Session
-            </button>
-          </div>
-        ) : (
-          <div className="micStack">
-            <button
-              type="button"
-              className={`micHoldButton ${micOn ? 'active' : ''}`}
-              onPointerDown={handleHoldStart}
-              onPointerUp={handleHoldEnd}
-              onPointerLeave={handleHoldEnd}
-              onPointerCancel={handleHoldEnd}
-              onContextMenu={(event) => event.preventDefault()}
-              disabled={
-                Boolean(interviewState?.completed) ||
-                status === 'processing' ||
-                status === 'connecting' ||
-                status === 'error' ||
-                status === 'speaking' ||
-                mode === 'speaking'
-              }
-              aria-label="Hold to talk"
-            >
-              <svg className="micGlyph" viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 1 0-8 0v4a4 4 0 0 0 4 4Zm-6-4a1 1 0 0 1 2 0 4 4 0 0 0 8 0 1 1 0 1 1 2 0 6 6 0 0 1-5 5.91V20h2a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2h2v-3.09A6 6 0 0 1 6 11Z" />
-              </svg>
-            </button>
-            <p className="micHint">Hold to talk. Release to send.</p>
-            <button type="button" className="endSessionTextButton" onClick={() => setShowEndConfirm(true)}>
-              End Session
-            </button>
-          </div>
-        )}
-
-        {error ? <p className="error">{error}</p> : null}
-      </footer>
-
       {showEndConfirm ? (
-        <div className="confirmOverlay" role="dialog" aria-modal="true" aria-label="Confirm end session">
+        <div className="confirmOverlay" role="dialog" aria-modal="true" aria-label={t('agent_confirm_end_title')}>
           <div className="confirmDialog">
-            <p className="eyebrow">Confirm</p>
-            <h3>End this interview session?</h3>
-            <p>This will stop the microphone and close the current session.</p>
+            <p className="eyebrow">{t('agent_confirm')}</p>
+            <h3>{t('agent_confirm_end_title')}</h3>
+            <p>{t('agent_confirm_end_text')}</p>
             <div className="confirmActions">
               <button type="button" className="btnGhost" onClick={() => setShowEndConfirm(false)}>
-                Keep Interview
+                {t('agent_keep_interview')}
               </button>
               <button type="button" className="btnPrimary" onClick={endInterview}>
-                Yes, End Session
+                {t('agent_yes_end')}
               </button>
             </div>
           </div>
