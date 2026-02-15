@@ -1876,7 +1876,99 @@ button:disabled {
 }
 
 .tableCard {
+  margin-top: 0;
+  border: 1px solid var(--line-soft);
+  border-radius: 0.9rem;
+  background: rgba(255, 252, 246, 0.86);
+}
+
+.collapsiblePanel {
   margin-top: 1rem;
+  border: 1px solid var(--line);
+  border-radius: 1rem;
+  background: linear-gradient(140deg, rgba(255, 251, 244, 0.96), rgba(250, 241, 227, 0.94));
+  box-shadow: 0 12px 24px -20px rgba(78, 58, 32, 0.28);
+  overflow: hidden;
+}
+
+.tablePanel {
+  margin-top: 1rem;
+}
+
+.collapsiblePanelHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  padding: 0.9rem 1rem;
+  background: linear-gradient(140deg, rgba(255, 253, 248, 0.98), rgba(245, 234, 214, 0.96));
+}
+
+.collapsiblePanel.open .collapsiblePanelHeader {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.collapsiblePanelHeading {
+  min-width: 0;
+}
+
+.collapsiblePanelTitle {
+  margin: 0.25rem 0 0;
+  font-size: clamp(1.05rem, 2.4vw, 1.35rem);
+  line-height: 1.15;
+  color: var(--text);
+}
+
+.collapsiblePanelToggle {
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  padding: 0.15rem 0.05rem;
+  color: var(--text-soft);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: color 160ms ease;
+}
+
+.collapsiblePanelToggle:hover {
+  color: var(--text);
+}
+
+.collapsiblePanelToggle .chevron {
+  width: 1.65rem;
+  height: 1.65rem;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  fill: none;
+  transition: transform 180ms ease;
+}
+
+.collapsiblePanelToggle .chevron.open {
+  transform: rotate(180deg);
+}
+
+.collapsiblePanelBody {
+  padding: 0 1rem 1rem;
+  background: linear-gradient(145deg, rgba(255, 251, 244, 0.92), rgba(249, 241, 227, 0.92));
+}
+
+.panelInnerCard {
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  padding: 0;
+}
+
+.panelInnerCard .tableHeader {
+  padding-top: 0.45rem;
+}
+
+.analyticsCardInner {
+  border: 1px solid var(--line-soft);
+  border-radius: 0.9rem;
+  overflow: hidden;
 }
 
 .tableHeader {
