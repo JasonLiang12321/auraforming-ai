@@ -47,6 +47,7 @@ export default function LandingPage() {
   const [codeChars, setCodeChars] = useState(Array.from({ length: CODE_LENGTH }, () => ''))
   const [clientError, setClientError] = useState('')
   const [clientStatus, setClientStatus] = useState('idle')
+  const [hasStartedScrolling, setHasStartedScrolling] = useState(() => (typeof window !== 'undefined' ? window.scrollY > 8 : false))
   const [introTarget, setIntroTarget] = useState(null)
   const inputRefs = useRef([])
   const validationSeqRef = useRef(0)
@@ -163,6 +164,52 @@ export default function LandingPage() {
       window.removeEventListener('orientationchange', updateIntroTarget)
     }
   }, [uiLanguage])
+
+  useEffect(() => {
+    const nodes = Array.from(document.querySelectorAll('[data-scroll-reveal]'))
+    if (!nodes.length) return
+
+    const updateRevealState = () => {
+      const viewportHeight = window.innerHeight || 1
+      const enterTop = viewportHeight * 0.98
+      const exitTop = viewportHeight * 0.28
+
+      nodes.forEach((node) => {
+        const rect = node.getBoundingClientRect()
+        const isActive = rect.top < enterTop && rect.bottom > exitTop
+        const isAfter = rect.bottom <= exitTop
+
+        node.classList.toggle('is-active', isActive)
+        node.classList.toggle('is-after', isAfter)
+      })
+    }
+
+    nodes.forEach((node) => {
+      node.classList.remove('is-active', 'is-after')
+    })
+
+    const rafId = window.requestAnimationFrame(updateRevealState)
+    window.addEventListener('scroll', updateRevealState, { passive: true })
+    window.addEventListener('resize', updateRevealState)
+
+    return () => {
+      window.cancelAnimationFrame(rafId)
+      window.removeEventListener('scroll', updateRevealState)
+      window.removeEventListener('resize', updateRevealState)
+    }
+  }, [])
+
+  useEffect(() => {
+    const handleScrollStart = () => {
+      if (window.scrollY > 8) {
+        setHasStartedScrolling(true)
+      }
+    }
+
+    handleScrollStart()
+    window.addEventListener('scroll', handleScrollStart, { passive: true })
+    return () => window.removeEventListener('scroll', handleScrollStart)
+  }, [])
 
   useEffect(() => {
     if (stage !== 'client') return
@@ -306,6 +353,11 @@ export default function LandingPage() {
     setMobileMenuOpen(false)
   }
 
+  const handleScrollCueClick = () => {
+    const nextSection = document.querySelector('.landingPoweredBy')
+    nextSection?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+  }
+
   return (
     <>
       <main className={`landingShell ${shellPhase} intro-${introPhase}`} style={shellStyle}>
@@ -316,7 +368,12 @@ export default function LandingPage() {
       </div>
 
       <div className={`landingIntro intro-${introPhase}`}>
-        <button type="button" className="landingLogo landingLogoButton landingBrandWordmark wordmark animateLetters" aria-label="auraforming.ai" onClick={goToStepOne}>
+        <button
+          type="button"
+          className="landingLogo landingLogoButton landingBrandWordmark wordmark animateLetters"
+          aria-label={t('brand_aria_label')}
+          onClick={goToStepOne}
+        >
           <span className="wordmarkText">{renderWordmarkLetters('auraforming', 0)}</span>
           <span className="wordmarkOrb" style={{ '--letter-index': 10.7 }} aria-hidden="true"></span>
           <span className="wordmarkText">{renderWordmarkLetters('ai', 12)}</span>
@@ -326,7 +383,13 @@ export default function LandingPage() {
       <section className="landingTopbar" aria-hidden={!(introPhase === 'header' || introPhase === 'ready')}>
         <header className="landingHeaderPanel">
           <div className="landingHeaderBrandSlot">
-            <Link ref={brandTargetRef} className="landingHeaderBrandLink landingBrandWordmark wordmark" to="/" aria-label="auraforming.ai" onClick={goToStepOne}>
+            <Link
+              ref={brandTargetRef}
+              className="landingHeaderBrandLink landingBrandWordmark wordmark"
+              to="/"
+              aria-label={t('brand_aria_label')}
+              onClick={goToStepOne}
+            >
               <span className="wordmarkText">{renderWordmarkLetters('auraforming', 0)}</span>
               <span className="wordmarkOrb" aria-hidden="true"></span>
               <span className="wordmarkText">{renderWordmarkLetters('ai', 12)}</span>
@@ -335,7 +398,7 @@ export default function LandingPage() {
           <button
             type="button"
             className={mobileMenuOpen ? 'landingHeaderMenuButton open' : 'landingHeaderMenuButton'}
-            aria-label="Menu"
+            aria-label={t('nav_menu_label')}
             aria-expanded={mobileMenuOpen}
             onClick={() => setMobileMenuOpen((open) => !open)}
           >
@@ -370,7 +433,7 @@ export default function LandingPage() {
         </header>
       </section>
 
-      <section className="landingHero">
+      <section className="landingHero scrollReveal fromLeft" data-scroll-reveal>
         <div className={`landingStageCard stage-${stage}`}>
           {stage === 'hero' ? (
             <div className="landingStage heroStage">
@@ -446,7 +509,7 @@ export default function LandingPage() {
                     autoComplete="off"
                     maxLength={1}
                     value={char}
-                    aria-label={`Form ID character ${index + 1}`}
+                    aria-label={t('landing_form_id_char_aria', { index: index + 1 })}
                     onChange={(event) => setSingleChar(index, event.target.value)}
                     onKeyDown={(event) => handleKeyDown(index, event)}
                   />
@@ -461,19 +524,29 @@ export default function LandingPage() {
             </div>
           ) : null}
         </div>
+
+        {stage === 'hero' && !hasStartedScrolling ? (
+          <button type="button" className="landingScrollCue" onClick={handleScrollCueClick} aria-label="Scroll down">
+            <span>Scroll down</span>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6 9l6 6 6-6" />
+            </svg>
+          </button>
+        ) : null}
+
       </section>
 
-      <section className="landingPoweredBy">
+      <section className="landingPoweredBy scrollReveal fromLeft" data-scroll-reveal>
         <div className="poweredByContainer">
           <h2 className="poweredByTitle">{t('landing_powered_by')}</h2>
           <div className="poweredByLogos">
-            <span className="poweredByLogo geminiLogo">Gemini</span>
-            <span className="poweredByLogo elevenlabsLogo">IIElevenLabs</span>
+            <span className="poweredByLogo geminiLogo">{t('landing_powered_gemini')}</span>
+            <span className="poweredByLogo elevenlabsLogo">{t('landing_powered_elevenlabs')}</span>
           </div>
         </div>
       </section>
 
-      <section className="landingAccessibility">
+      <section className="landingAccessibility scrollReveal fromRight" data-scroll-reveal>
         <div className="accessibilityContainer">
           <h2 className="accessibilityTitle">{t('landing_accessibility')}</h2>
           <ul className="accessibilityList">

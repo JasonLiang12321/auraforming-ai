@@ -55,6 +55,13 @@ def _needs_translation_retry(*, source_text: str, translated_text: str) -> bool:
     return False
 
 
+def _chunk_dict(data: dict[str, str], chunk_size: int = 28) -> list[dict[str, str]]:
+    items = list((data or {}).items())
+    if not items:
+        return []
+    return [dict(items[index : index + chunk_size]) for index in range(0, len(items), chunk_size)]
+
+
 def run_gemini_json(*, prompt: str, response_schema: dict, model_name: str | None = None) -> dict:
     if not GEMINI_API_KEY:
         raise GeminiAuthError("Missing GEMINI_API_KEY.")
@@ -209,7 +216,6 @@ Requirements:
 
 
 @gemini_bp.post("/gemini/ui-translations")
-
 def translate_ui_messages():
     try:
         data = request.get_json(silent=True) or {}
@@ -221,7 +227,7 @@ def translate_ui_messages():
             return jsonify({"error": "Missing source_messages"}), 400
 
         family = _language_family(language_code)
-        if family in {"en", "ru", "zh"}:
+        if family == "en":
             return jsonify({"messages": source_messages, "cached": True}), 200
 
         normalized_messages = {str(key): str(value) for key, value in source_messages.items() if str(key).strip()}
@@ -290,8 +296,18 @@ Rules:
             )
             merge_translations(result_payload, source_map)
 
-        # Pass 1 for all keys, then retry unresolved keys up to 2 more times.
-        run_translation_pass(normalized_messages)
+        # Pass 1 in chunks, then retry unresolved keys up to 2 more times.
+        for source_chunk in _chunk_dict(normalized_messages):
+            try:
+                run_translation_pass(source_chunk)
+            except GeminiRequestError as exc:
+                logger.warning(
+                    "UI translation chunk failed (family=%s size=%s): %s",
+                    family,
+                    len(source_chunk),
+                    exc,
+                )
+
         for _ in range(2):
             unresolved = {
                 key: source_value
@@ -303,7 +319,16 @@ Rules:
             }
             if not unresolved:
                 break
-            run_translation_pass(unresolved)
+            for unresolved_chunk in _chunk_dict(unresolved):
+                try:
+                    run_translation_pass(unresolved_chunk)
+                except GeminiRequestError as exc:
+                    logger.warning(
+                        "UI translation retry chunk failed (family=%s size=%s): %s",
+                        family,
+                        len(unresolved_chunk),
+                        exc,
+                    )
 
         # Guarantee every requested key has a value.
         for key, value in normalized_messages.items():

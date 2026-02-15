@@ -18,7 +18,7 @@ function isLikelyTranslated(sourceText, targetText) {
   if (!target) return false
   if (source !== target) return true
   if (!/[A-Za-z]/.test(source)) return true
-  if (source.length <= 5) return true
+  if (/^(pdf|json|api|gemini|auraforming|elevenlabs)$/i.test(source)) return true
   return false
 }
 
@@ -27,6 +27,25 @@ function shallowEqualMessages(a = {}, b = {}) {
   const keysB = Object.keys(b)
   if (keysA.length !== keysB.length) return false
   return keysA.every((key) => a[key] === b[key])
+}
+
+function mergeTranslatedMessages({ englishMessages = {}, previousMessages = {}, incomingMessages = {} }) {
+  const merged = { ...previousMessages }
+  for (const [key, nextValueRaw] of Object.entries(incomingMessages || {})) {
+    const nextValue = String(nextValueRaw || '')
+    if (!nextValue) continue
+
+    const sourceValue = String(englishMessages[key] || '')
+    const previousValue = String(previousMessages[key] || '')
+    const nextLooksTranslated = isLikelyTranslated(sourceValue, nextValue)
+    const previousLooksTranslated = isLikelyTranslated(sourceValue, previousValue)
+
+    // Never overwrite a good translation with an English echo from a weaker pass.
+    if (nextLooksTranslated || !previousLooksTranslated) {
+      merged[key] = nextValue
+    }
+  }
+  return merged
 }
 
 function readCachedMessagesByFamily(family) {
@@ -54,7 +73,11 @@ function buildTranslator(languageCode, runtimeMessages) {
   const englishMessages = UI_MESSAGES.en || {}
 
   return (key, params = {}) => {
-    const template = dynamicFamilyMessages[key] || familyMessages[key] || englishMessages[key] || key
+    const sourceTemplate = String(englishMessages[key] || '')
+    const dynamicTemplate = String(dynamicFamilyMessages[key] || '')
+    const staticTemplate = String(familyMessages[key] || '')
+    const useDynamic = dynamicTemplate && isLikelyTranslated(sourceTemplate, dynamicTemplate)
+    const template = (useDynamic ? dynamicTemplate : '') || staticTemplate || dynamicTemplate || sourceTemplate || key
     return interpolate(template, params)
   }
 }
@@ -89,45 +112,65 @@ export function I18nProvider({ children }) {
     if (!family || family === 'en') return
 
     const baseFamilyMessages = UI_MESSAGES[family] || {}
-    const missingEntries = Object.fromEntries(
-      Object.entries(englishMessages).filter(([key]) => !baseFamilyMessages[key]),
-    )
-    const missingKeys = Object.keys(missingEntries)
-    if (!missingKeys.length) return
-
     const currentRuntime = runtimeMessages?.[family] || {}
-    const hasAllRuntimeKeys = missingKeys.every((key) =>
-      isLikelyTranslated(englishMessages[key], currentRuntime[key]),
+    const needsTranslationEntries = Object.fromEntries(
+      Object.entries(englishMessages).filter(([key, sourceText]) => {
+        const staticText = baseFamilyMessages[key]
+        return !isLikelyTranslated(sourceText, staticText)
+      }),
     )
-    if (hasAllRuntimeKeys) return
+    const allCandidateKeys = Object.keys(needsTranslationEntries)
+    if (!allCandidateKeys.length) return
 
     const cacheKey = `${UI_DYNAMIC_CACHE_PREFIX}${family}`
     const cached = readCachedMessagesByFamily(family)
+    let resolvedRuntime = currentRuntime
     if (cached) {
+      resolvedRuntime = mergeTranslatedMessages({
+        englishMessages,
+        previousMessages: currentRuntime,
+        incomingMessages: cached,
+      })
       setRuntimeMessages((prev) => {
         const prevFamily = prev?.[family] || {}
-        if (shallowEqualMessages(prevFamily, cached)) return prev
-        return { ...prev, [family]: cached }
+        const merged = mergeTranslatedMessages({
+          englishMessages,
+          previousMessages: prevFamily,
+          incomingMessages: cached,
+        })
+        if (shallowEqualMessages(prevFamily, merged)) return prev
+        return { ...prev, [family]: merged }
       })
-
-      const cachedHasAll = missingKeys.every((key) =>
-        isLikelyTranslated(englishMessages[key], cached[key]),
-      )
-      if (cachedHasAll) return
     }
+
+    const unresolvedEntries = Object.fromEntries(
+      Object.entries(needsTranslationEntries).filter(([key, sourceText]) =>
+        !isLikelyTranslated(sourceText, resolvedRuntime[key]),
+      ),
+    )
+    if (!Object.keys(unresolvedEntries).length) return
 
     let cancelled = false
     const loadMissingTranslations = async () => {
       try {
-        const payload = await translateUiMessages(uiLanguage, missingEntries)
+        const payload = await translateUiMessages(uiLanguage, unresolvedEntries)
         const messages = payload?.messages
         if (cancelled || !messages || typeof messages !== 'object') return
+        let nextFamilyMessages = null
         setRuntimeMessages((prev) => {
           const prevFamily = prev?.[family] || {}
-          if (shallowEqualMessages(prevFamily, messages)) return prev
-          return { ...prev, [family]: messages }
+          const merged = mergeTranslatedMessages({
+            englishMessages,
+            previousMessages: prevFamily,
+            incomingMessages: messages,
+          })
+          if (shallowEqualMessages(prevFamily, merged)) return prev
+          nextFamilyMessages = merged
+          return { ...prev, [family]: merged }
         })
-        window.localStorage.setItem(cacheKey, JSON.stringify(messages))
+        if (nextFamilyMessages) {
+          window.localStorage.setItem(cacheKey, JSON.stringify(nextFamilyMessages))
+        }
       } catch {
         // keep static fallback behavior
       }

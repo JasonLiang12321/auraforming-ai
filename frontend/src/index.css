@@ -754,9 +754,11 @@ select {
   z-index: 1;
   width: min(1180px, 100%);
   margin: 0 auto;
-  padding-top: 12rem;
+  min-height: 100dvh;
+  padding-top: clamp(8.8rem, 16vh, 12rem);
+  padding-bottom: clamp(1.4rem, 4.5vh, 3rem);
   text-align: center;
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   flex-direction: column;
   justify-content: center;
@@ -930,6 +932,18 @@ select {
   justify-content: center;
   min-height: 100%;
   text-align: left;
+}
+
+.heroStage .heroColumnText {
+  opacity: 0;
+  transform: translate3d(-42px, 0, 0);
+  animation: heroPanelInLeft 760ms cubic-bezier(0.2, 0.72, 0.2, 1) 160ms forwards;
+}
+
+.heroStage .heroColumnDemo {
+  opacity: 0;
+  transform: translate3d(42px, 0, 0);
+  animation: heroPanelInRight 760ms cubic-bezier(0.2, 0.72, 0.2, 1) 230ms forwards;
 }
 
 .beginFocus {
@@ -1117,7 +1131,8 @@ select {
   z-index: 1;
   width: 100%;
   margin: 0 auto;
-  padding: 4rem 1rem;
+  min-height: auto;
+  padding: clamp(2.2rem, 4.6vh, 3.4rem) 1rem clamp(1.4rem, 3.4vh, 2.2rem);
   display: flex;
   justify-content: center;
   align-items: center;
@@ -1170,10 +1185,43 @@ select {
   z-index: 1;
   width: 100%;
   margin: 0 auto;
-  padding: 1rem 1rem 4rem;
+  min-height: auto;
+  padding: clamp(3.6rem, 6.4vh, 5rem) 1rem clamp(1.4rem, 3.4vh, 2.4rem);
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+.landingScrollCue {
+  align-self: center;
+  margin-top: clamp(0.8rem, 1.9vh, 1.25rem);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.22rem;
+  border: 0;
+  background: transparent;
+  color: rgba(97, 70, 38, 0.88);
+  font-family: var(--font-sans);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: opacity 180ms ease, color 180ms ease;
+}
+
+.landingScrollCue:hover {
+  color: rgba(74, 52, 27, 0.98);
+}
+
+.landingScrollCue svg {
+  width: 1.2rem;
+  height: 1.2rem;
+  stroke: currentColor;
+  stroke-width: 1.9;
+  fill: none;
+  animation: landingScrollCueFloat 1.35s ease-in-out infinite;
 }
 
 .accessibilityContainer {
@@ -1229,6 +1277,35 @@ select {
   display: flex;
   justify-content: center;
   align-items: center;
+}
+
+.scrollReveal {
+  --reveal-enter-x: 88px;
+  --reveal-exit-x: -88px;
+  opacity: 0;
+  transform: translate3d(var(--reveal-enter-x), 0, 0);
+  transition: transform 620ms cubic-bezier(0.2, 0.72, 0.2, 1), opacity 520ms ease;
+  will-change: transform, opacity;
+}
+
+.scrollReveal.fromLeft {
+  --reveal-enter-x: -88px;
+  --reveal-exit-x: 88px;
+}
+
+.scrollReveal.fromRight {
+  --reveal-enter-x: 88px;
+  --reveal-exit-x: -88px;
+}
+
+.scrollReveal.is-active {
+  opacity: 1;
+  transform: translate3d(0, 0, 0);
+}
+
+.scrollReveal.is-after {
+  opacity: 0;
+  transform: translate3d(var(--reveal-exit-x), 0, 0);
 }
 
 .footerContent {
@@ -3475,6 +3552,43 @@ button:disabled {
   }
 }
 
+@keyframes heroPanelInLeft {
+  from {
+    opacity: 0;
+    transform: translate3d(-42px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes heroPanelInRight {
+  from {
+    opacity: 0;
+    transform: translate3d(42px, 0, 0);
+  }
+  to {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+@keyframes landingScrollCueFloat {
+  0% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+  50% {
+    transform: translateY(6px);
+    opacity: 1;
+  }
+  100% {
+    transform: translateY(0);
+    opacity: 0.55;
+  }
+}
+
 @media (max-width: 980px) {
   .gridTwo {
     grid-template-columns: 1fr;
@@ -3486,8 +3600,8 @@ button:disabled {
   }
 
   .landingHero {
-    margin-top: 5.6rem;
-    min-height: 0;
+    margin-top: 0;
+    min-height: 100dvh;
     overflow: visible;
   }
 
@@ -3953,7 +4067,7 @@ button:disabled {
   }
 
   .landingHero {
-    margin-top: 3.2rem;
+    margin-top: 0;
   }
 
   .landingShell {
@@ -3992,7 +4106,7 @@ button:disabled {
   }
 
   .landingHero {
-    margin-top: 2.8rem;
+    margin-top: 0;
   }
 
   .landingShell {
@@ -4003,5 +4117,24 @@ button:disabled {
 @media (min-width: 1200px) {
   .landingShell {
     --intro-home-scale: 3.05;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .scrollReveal {
+    opacity: 1;
+    transform: none;
+    transition: none;
+  }
+
+  .landingScrollCue svg {
+    animation: none;
+  }
+
+  .heroStage .heroColumnText,
+  .heroStage .heroColumnDemo {
+    opacity: 1;
+    transform: none;
+    animation: none;
   }
 }
