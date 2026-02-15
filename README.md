@@ -7,10 +7,13 @@ Lean full-stack starter with:
 - Business upload endpoint: `POST /api/admin/upload`
 - Share page route: `/agent/{agent_id}` (frontend)
 - Agent details endpoint: `GET /api/agent/{agent_id}`
-- ElevenLabs signed-url endpoint: `GET /api/agent/{agent_id}/signed-url`
+- Guided interview start endpoint: `POST /api/agent/{agent_id}/interview/start`
+- Guided interview turn endpoint: `POST /api/agent/{agent_id}/interview/turn`
+- Guided interview audio turn endpoint: `POST /api/agent/{agent_id}/interview/turn-audio`
+- Interview speech synthesis endpoint: `POST /api/agent/{agent_id}/interview/speak`
 - Completed sessions endpoint: `GET /api/admin/dashboard/sessions`
 - Completed session detail endpoint: `GET /api/admin/dashboard/sessions/{session_id}`
-- ElevenLabs prompt config doc: `docs/ElevenlabsAgentConfig.md`
+- ElevenLabs prompt config doc: `docs/ElevenlabsAgentConfig.md` (legacy conversational mode)
 
 ## Prerequisites
 
@@ -88,12 +91,20 @@ Set these before running backend:
 
 ```bash
 export ELEVENLABS_API_KEY="your_api_key"
-export ELEVENLABS_AGENT_ID="your_conversational_agent_id"
+export ELEVENLABS_VOICE_ID="your_tts_voice_id"
+export ELEVENLABS_TTS_MODEL="eleven_flash_v2_5"
+export ELEVENLABS_STT_MODEL="scribe_v1"
+export GEMINI_API_KEY="your_google_ai_key"
+export GEMINI_MODEL="gemini-2.0-flash"
 ```
 
 Notes:
-- Configure that ElevenLabs agent with voice model `eleven_flash_v2_5`.
-- Configure a first message so users hear a greeting when the session connects.
+- Interview flow is now deterministic:
+  - browser records user audio
+  - backend sends audio to ElevenLabs STT
+  - backend sends transcript to Gemini
+  - backend sends Gemini response text to ElevenLabs TTS
+- Guided interview validation is handled by Gemini.
 
 ## 4) Verify API Connection
 

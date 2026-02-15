@@ -1,8 +1,16 @@
 import { useEffect, useMemo, useState } from 'react'
 import PortalHeader from '../components/PortalHeader'
-import { getDashboardSession, listDashboardSessions } from '../services/api'
+import { useI18n } from '../i18n/I18nProvider'
+import { API_BASE_URL, getDashboardSession, listDashboardSessions } from '../services/api'
+
+function toApiAbsoluteUrl(path) {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return path
+  return `${API_BASE_URL}${path}`
+}
 
 function SessionModal({ sessionId, onClose }) {
+  const { t } = useI18n()
   const [session, setSession] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -31,28 +39,33 @@ function SessionModal({ sessionId, onClose }) {
     <div className="modalBackdrop" onClick={onClose}>
       <section className="sessionModal" onClick={(event) => event.stopPropagation()}>
         <div className="modalHeader">
-          <h2>Session {sessionId}</h2>
+          <h2>{t('dashboard_modal_title', { id: sessionId })}</h2>
           <button type="button" className="btnGhost" onClick={onClose}>
-            Close
+            {t('page_close')}
           </button>
         </div>
 
-        {loading && <p className="hint">Loading session details...</p>}
+        {loading && <p className="hint">{t('loading_intake_details')}</p>}
         {error && <p className="error">{error}</p>}
 
         {session && (
-          <div className="modalSplit">
-            <div className="modalPane">
-              <p className="paneLabel">Extracted JSON</p>
+          <div className="modalSplit intakeModalSplit">
+            <div className="modalPane previewPane">
+              <p className="paneLabel">{t('dashboard_modal_preview')}</p>
+              <iframe title={`preview-${session.session_id}`} src={toApiAbsoluteUrl(session.pdf_preview_url)} className="pdfFrame" />
+              <div className="previewActions">
+                <a href={toApiAbsoluteUrl(session.pdf_preview_url)} className="btnGhost btnLink" target="_blank" rel="noreferrer">
+                  {t('dashboard_modal_open_tab')}
+                </a>
+                <a href={toApiAbsoluteUrl(session.download_url)} className="btnPrimary btnLink" target="_blank" rel="noreferrer">
+                  {t('dashboard_modal_download')}
+                </a>
+              </div>
+            </div>
+            <details className="modalPane previewJsonDetails">
+              <summary>{t('dashboard_modal_show_json')}</summary>
               <pre>{JSON.stringify(session.answers, null, 2)}</pre>
-            </div>
-            <div className="modalPane">
-              <p className="paneLabel">Filled PDF Preview</p>
-              <iframe title={`preview-${session.session_id}`} src={session.pdf_preview_url} className="pdfFrame" />
-              <a href={session.download_url} className="btnPrimary btnLink" target="_blank" rel="noreferrer">
-                Download PDF
-              </a>
-            </div>
+            </details>
           </div>
         )}
       </section>
@@ -61,6 +74,7 @@ function SessionModal({ sessionId, onClose }) {
 }
 
 export default function AdminDashboardPage() {
+  const { t, formatDateTime } = useI18n()
   const [sessions, setSessions] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
@@ -83,30 +97,38 @@ export default function AdminDashboardPage() {
     void loadSessions()
   }, [])
 
-  const countLabel = useMemo(() => `${sessions.length} completed session${sessions.length === 1 ? '' : 's'}`, [sessions.length])
+  const countLabel = useMemo(
+    () =>
+      sessions.length === 1
+        ? t('dashboard_count_one', { count: sessions.length })
+        : t('dashboard_count_many', { count: sessions.length }),
+    [sessions.length, t],
+  )
 
   return (
     <main className="pageShell">
       <PortalHeader />
       <section className="hero">
-        <p className="eyebrow adminEyebrow">Client Sessions</p>
-        <h1>Completed Conversations</h1>
-        <p className="heroText">Open any session to review the captured data and the completed form side by side.</p>
+        <p className="eyebrow">{t('business_portal')}</p>
+        <h1>{t('dashboard_title')}</h1>
+        <p className="heroText">{t('dashboard_subtitle')}</p>
       </section>
 
       <section className="card tableCard">
         <div className="tableHeader">
           <p className="paneLabel">{countLabel}</p>
-          <button type="button" className="btnGhost" onClick={loadSessions}>
-            Refresh
+          <button type="button" className="iconBtn refreshBtn" onClick={loadSessions} aria-label={t('dashboard_refresh')} title={t('dashboard_refresh')}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4.5 12a7.5 7.5 0 0112.2-5.8l.65.54H15a.75.75 0 000 1.5h4.5a.75.75 0 00.75-.75V3a.75.75 0 00-1.5 0v2.04l-.58-.48A9 9 0 1021 12a.75.75 0 00-1.5 0 7.5 7.5 0 11-15 0z" />
+            </svg>
           </button>
         </div>
 
-        {loading ? <p className="hint">Loading sessions...</p> : null}
+        {loading ? <p className="hint">{t('loading_intakes')}</p> : null}
         {error ? <p className="error">{error}</p> : null}
 
         {!loading && sessions.length === 0 ? (
-          <p className="hint">No completed sessions yet. Finish an interview from an agent link first.</p>
+          <p className="hint">{t('dashboard_empty')}</p>
         ) : null}
 
         {sessions.length > 0 ? (
@@ -114,10 +136,10 @@ export default function AdminDashboardPage() {
             <table className="sessionTable">
               <thead>
                 <tr>
-                  <th>Session</th>
-                  <th>Agent</th>
-                  <th>Fields</th>
-                  <th>Created</th>
+                  <th>{t('dashboard_table_session')}</th>
+                  <th>{t('dashboard_table_agent')}</th>
+                  <th>{t('dashboard_table_fields')}</th>
+                  <th>{t('dashboard_table_created')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -126,7 +148,7 @@ export default function AdminDashboardPage() {
                     <td>{session.session_id}</td>
                     <td>{session.agent_id}</td>
                     <td>{session.field_count}</td>
-                    <td>{new Date(session.created_at).toLocaleString()}</td>
+                    <td>{formatDateTime(session.created_at)}</td>
                   </tr>
                 ))}
               </tbody>

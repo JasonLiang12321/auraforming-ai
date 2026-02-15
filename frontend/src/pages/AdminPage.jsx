@@ -1,9 +1,10 @@
 import { useState } from 'react'
-import { Link } from 'react-router-dom'
 import PdfUploadForm from '../components/PdfUploadForm'
 import PortalHeader from '../components/PortalHeader'
+import { useI18n } from '../i18n/I18nProvider'
 
 export default function AdminPage() {
+  const { t } = useI18n()
   const [lastAgent, setLastAgent] = useState(null)
 
   return (
@@ -11,18 +12,13 @@ export default function AdminPage() {
       <PortalHeader />
 
       <section className="hero">
-        <p className="eyebrow adminEyebrow">Business Portal</p>
-        <h1>Give Clients a Calm, Guided Way to Complete Complex Forms</h1>
-        <p className="heroText">
-          Upload a fillable PDF form and we'll automatically generate a private interview link. Complete and review sessions seamlessly with any microphone.
-        </p>
+        <p className="eyebrow">{t('business_portal')}</p>
+        <h1>{t('admin_hero_title')}</h1>
+        <p className="heroText">{t('admin_hero_text')}</p>
         <div className="heroActions">
-          <Link className="btnPrimary btnLink" to="/admin/dashboard">
-            Open Session Dashboard
-          </Link>
           {lastAgent?.share_url ? (
             <a className="btnGhost btnLink" href={lastAgent.share_url} target="_blank" rel="noreferrer">
-              Open Latest Agent
+              {t('admin_open_latest_agent')}
             </a>
           ) : null}
         </div>

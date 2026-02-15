@@ -1,5 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
+import { getAgentById } from '../services/api'
+import { useI18n } from '../i18n/I18nProvider'
 
 function BusinessIcon() {
   return (
@@ -31,17 +33,20 @@ function renderWordmarkLetters(text, startIndex = 0) {
 }
 
 export default function LandingPage() {
+  const { t, uiLanguage, setUiLanguage, supportedLanguages } = useI18n()
   const navigate = useNavigate()
   const CODE_LENGTH = 8
   const [stage, setStage] = useState('hero')
   const [introPhase, setIntroPhase] = useState('intro')
   const [codeChars, setCodeChars] = useState(Array.from({ length: CODE_LENGTH }, () => ''))
   const [clientError, setClientError] = useState('')
+  const [clientStatus, setClientStatus] = useState('idle')
+  const [introTarget, setIntroTarget] = useState(null)
   const inputRefs = useRef([])
+  const validationSeqRef = useRef(0)
+  const brandTargetRef = useRef(null)
 
-  const joinedCode = useMemo(() => codeChars.join(''), [codeChars])
-
-  const parseAgentIdInput = (value) => {
+  function parseAgentIdInput(value) {
     const trimmed = value.trim()
     if (!trimmed) return ''
 
@@ -61,15 +66,62 @@ export default function LandingPage() {
     return trimmed
   }
 
+  const joinedCode = useMemo(() => codeChars.join(''), [codeChars])
+  const shellPhase = useMemo(() => {
+    if (introPhase === 'ready') return 'ready'
+    if (introPhase === 'header') return 'framing'
+    return 'preload'
+  }, [introPhase])
+
+  const shellStyle = useMemo(() => {
+    if (!introTarget) return undefined
+    return {
+      '--intro-target-left': `${introTarget.left}px`,
+      '--intro-target-top': `${introTarget.top}px`,
+    }
+  }, [introTarget])
+
   useEffect(() => {
-    const dockTimer = window.setTimeout(() => setIntroPhase('dock'), 1400)
-    const readyTimer = window.setTimeout(() => setIntroPhase('ready'), 2350)
+    const dockTimer = window.setTimeout(() => setIntroPhase('dock'), 1300)
+    const headerTimer = window.setTimeout(() => setIntroPhase('header'), 2050)
+    const readyTimer = window.setTimeout(() => setIntroPhase('ready'), 2850)
 
     return () => {
       window.clearTimeout(dockTimer)
+      window.clearTimeout(headerTimer)
       window.clearTimeout(readyTimer)
     }
   }, [])
+
+  useEffect(() => {
+    const updateIntroTarget = () => {
+      const node = brandTargetRef.current
+      if (!node) return
+      const rect = node.getBoundingClientRect()
+      const next = {
+        left: Number(rect.left.toFixed(2)),
+        top: Number(rect.top.toFixed(2)),
+      }
+
+      setIntroTarget((current) => {
+        if (current && current.left === next.left && current.top === next.top) {
+          return current
+        }
+        return next
+      })
+    }
+
+    updateIntroTarget()
+    const rafId = window.requestAnimationFrame(updateIntroTarget)
+    window.addEventListener('resize', updateIntroTarget)
+    window.addEventListener('orientationchange', updateIntroTarget)
+
+    return () => {
+      window.cancelAnimationFrame(rafId)
+      window.removeEventListener('resize', updateIntroTarget)
+      window.removeEventListener('orientationchange', updateIntroTarget)
+    }
+  }, [uiLanguage])
 
   useEffect(() => {
     if (stage !== 'client') return
@@ -78,11 +130,43 @@ export default function LandingPage() {
     inputRefs.current[focusIndex]?.focus()
   }, [CODE_LENGTH, codeChars, stage])
 
-  const connectWithCode = (chars) => {
-    const code = chars.join('').trim()
-    if (code.length !== CODE_LENGTH) return
+  useEffect(() => {
+    if (stage !== 'client') return
+    if (joinedCode.length !== CODE_LENGTH) {
+      setClientStatus('idle')
+      return
+    }
+
+    let cancelled = false
+    const seq = validationSeqRef.current + 1
+    validationSeqRef.current = seq
+    setClientStatus('checking')
     setClientError('')
-    navigate(`/agent/${encodeURIComponent(code)}?autostart=1`)
+
+    const validate = async () => {
+      try {
+        await getAgentById(joinedCode)
+        if (cancelled || validationSeqRef.current !== seq) return
+        setClientStatus('valid')
+      } catch {
+        if (cancelled || validationSeqRef.current !== seq) return
+        setClientStatus('invalid')
+        setClientError(t('landing_invalid_code'))
+      }
+    }
+
+    void validate()
+    return () => {
+      cancelled = true
+    }
+  }, [CODE_LENGTH, joinedCode, stage])
+
+  const continueWithCode = () => {
+    if (clientStatus !== 'valid') {
+      setClientError(t('landing_invalid_code'))
+      return
+    }
+    navigate(`/agent/${encodeURIComponent(joinedCode)}?autostart=1`)
   }
 
   const setSingleChar = (index, rawValue) => {
@@ -93,6 +177,8 @@ export default function LandingPage() {
         next[index] = ''
         return next
       })
+      setClientError('')
+      setClientStatus('idle')
       return
     }
 
@@ -103,13 +189,13 @@ export default function LandingPage() {
           next[index + i] = cleaned[i]
         }
         const nextEmpty = next.findIndex((char) => !char)
-        if (nextEmpty === -1) {
-          connectWithCode(next)
-        } else {
+        if (nextEmpty !== -1) {
           inputRefs.current[nextEmpty]?.focus()
         }
         return next
       })
+      setClientError('')
+      setClientStatus('idle')
       return
     }
 
@@ -119,11 +205,10 @@ export default function LandingPage() {
       if (index < CODE_LENGTH - 1) {
         inputRefs.current[index + 1]?.focus()
       }
-      if (next.every(Boolean)) {
-        connectWithCode(next)
-      }
       return next
     })
+    setClientError('')
+    setClientStatus('idle')
   }
 
   const handleKeyDown = (index, event) => {
@@ -146,15 +231,15 @@ export default function LandingPage() {
     const pasted = parsed.replace(/[^A-Za-z0-9_-]/g, '').slice(0, CODE_LENGTH)
 
     if (!pasted) {
-      setClientError('Use letters and numbers only.')
+      setClientError(t('landing_invalid_code'))
+      setClientStatus('invalid')
       return
     }
 
     const next = Array.from({ length: CODE_LENGTH }, (_, index) => pasted[index] || '')
     setCodeChars(next)
-    if (next.every(Boolean)) {
-      connectWithCode(next)
-    }
+    setClientError('')
+    setClientStatus('idle')
   }
 
   const goToIntent = () => setStage('intent')
@@ -162,6 +247,7 @@ export default function LandingPage() {
   const goToStepOne = () => {
     setClientError('')
     setCodeChars(Array.from({ length: CODE_LENGTH }, () => ''))
+    setClientStatus('idle')
     setStage('hero')
   }
 
@@ -170,11 +256,12 @@ export default function LandingPage() {
   const chooseClient = () => {
     setClientError('')
     setCodeChars(Array.from({ length: CODE_LENGTH }, () => ''))
+    setClientStatus('idle')
     setStage('client')
   }
 
   return (
-    <main className={`landingShell ${introPhase === 'ready' ? 'ready' : 'preload'}`}>
+    <main className={`landingShell ${shellPhase} intro-${introPhase}`} style={shellStyle}>
       <div className="zenBackdrop" aria-hidden="true">
         <span className="zenBlob blobA"></span>
         <span className="zenBlob blobB"></span>
@@ -182,32 +269,66 @@ export default function LandingPage() {
       </div>
 
       <div className={`landingIntro intro-${introPhase}`}>
-        <button type="button" className="landingLogo landingLogoButton wordmark animateLetters" aria-label="auraforming.ai" onClick={goToStepOne}>
+        <button type="button" className="landingLogo landingLogoButton landingBrandWordmark wordmark animateLetters" aria-label="auraforming.ai" onClick={goToStepOne}>
           <span className="wordmarkText">{renderWordmarkLetters('auraforming', 0)}</span>
           <span className="wordmarkOrb" style={{ '--letter-index': 10.7 }} aria-hidden="true"></span>
           <span className="wordmarkText">{renderWordmarkLetters('ai', 12)}</span>
         </button>
       </div>
 
+      <section className="landingTopbar" aria-hidden={!(introPhase === 'header' || introPhase === 'ready')}>
+        <header className="landingHeaderPanel">
+          <div className="landingHeaderBrandSlot" aria-hidden="true">
+            <span ref={brandTargetRef} className="landingHeaderBrandGhost landingBrandWordmark wordmark">
+              <span className="wordmarkText">{renderWordmarkLetters('auraforming', 0)}</span>
+              <span className="wordmarkOrb" aria-hidden="true"></span>
+              <span className="wordmarkText">{renderWordmarkLetters('ai', 12)}</span>
+            </span>
+          </div>
+          <nav className="landingHeaderNavGhost">
+            <Link className="landingHeaderNavLink" to="/admin">
+              {t('nav_create_link')}
+            </Link>
+            <Link className="landingHeaderNavLink" to="/admin/agents">
+              {t('nav_agents')}
+            </Link>
+            <Link className="landingHeaderNavLink" to="/admin/dashboard">
+              {t('nav_intakes')}
+            </Link>
+          </nav>
+          <label className="landingHeaderLanguageSelect">
+            <span>{t('nav_language_label')}</span>
+            <select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}>
+              {supportedLanguages.map((language) => (
+                <option key={language.code} value={language.code}>
+                  {language.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </header>
+      </section>
+
       <section className="landingHero">
         <div className={`landingStageCard stage-${stage}`}>
           {stage === 'hero' ? (
             <div className="landingStage heroStage">
-              <h1 className="landingTitle">Paperwork, humanized.</h1>
-              <p className="landingSubtitle">Breeze through complex forms with a helpful voice.</p>
+              <h1 className="landingTitle">{t('landing_title')}</h1>
+              <p className="landingSubtitle">{t('landing_subtitle')}</p>
 
               <div className="simulationFrame" aria-hidden="true">
                 <div className="videoOrb"></div>
                 <div className="demoLines">
-                  <p>Client: &quot;What does indemnity mean here?&quot;</p>
-                  <p>Assistant: &quot;Let&apos;s practice that with a quick real-life example.&quot;</p>
-                  <p>Assistant: &quot;Great. Now we&apos;ll continue your form.&quot;</p>
+                  <p>{t('landing_demo_client')}</p>
+                  <p>{t('landing_demo_assistant_1')}</p>
+                  <p>{t('landing_demo_assistant_2')}</p>
+                  <p>{t('landing_demo_assistant_3')}</p>
                 </div>
               </div>
 
               <div className="beginFocus">
                 <button type="button" className="beginButton" onClick={goToIntent}>
-                  Begin
+                  {t('landing_begin')}
                 </button>
               </div>
             </div>
@@ -215,20 +336,19 @@ export default function LandingPage() {
 
           {stage === 'intent' ? (
             <div className="landingStage intentStage">
-              <p className="eyebrow stepTwoLabel">Step 2</p>
-              <h2 className="intentTitle">How can we help you today?</h2>
+              <h2 className="intentTitle">{t('landing_help_title')}</h2>
 
               <div className="gatewayCards">
                 <button type="button" className="gatewayCard" onClick={chooseAdmin}>
                   <BusinessIcon />
-                  <p className="gatewayLabel">I want to create a form</p>
-                  <p className="gatewayDesc">Upload a PDF and generate a guided interview link for clients.</p>
+                  <p className="gatewayLabel">{t('landing_admin_label')}</p>
+                  <p className="gatewayDesc">{t('landing_admin_desc')}</p>
                 </button>
 
                 <button type="button" className="gatewayCard" onClick={chooseClient}>
                   <ClientIcon />
-                  <p className="gatewayLabel">I was asked to fill out a form</p>
-                  <p className="gatewayDesc">Enter your ID and start a guided voice interview with no account.</p>
+                  <p className="gatewayLabel">{t('landing_client_label')}</p>
+                  <p className="gatewayDesc">{t('landing_client_desc')}</p>
                 </button>
               </div>
             </div>
@@ -237,10 +357,9 @@ export default function LandingPage() {
           {stage === 'client' ? (
             <div className="landingStage clientStage">
               <button type="button" className="gatewayBack" onClick={() => setStage('intent')}>
-                Back
+                {t('page_back')}
               </button>
-              <p className="eyebrow stepThreeLabel">Step 3</p>
-              <h2 className="intentTitle">Please enter your unique Form ID.</h2>
+              <h2 className="intentTitle">{t('landing_enter_form_id')}</h2>
 
               <div className="idEntryRow" onPaste={handlePaste}>
                 {codeChars.map((char, index) => (
@@ -261,9 +380,11 @@ export default function LandingPage() {
                 ))}
               </div>
 
-              <p className="clientHint">Type or paste your 8-character code. We&apos;ll connect automatically.</p>
-              {clientError ? <p className="error">{clientError}</p> : null}
-              <p className="idPreview">{joinedCode ? `Current code: ${joinedCode}` : 'Waiting for code...'}</p>
+              <button type="button" className="btnGhost continueButtonSmall" onClick={continueWithCode} disabled={clientStatus !== 'valid'}>
+                {t('page_continue')}
+              </button>
+
+              <p className={clientError ? 'error clientErrorSlot visible' : 'error clientErrorSlot'}>{clientError || ' '}</p>
             </div>
           ) : null}
         </div>
