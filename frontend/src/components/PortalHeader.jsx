@@ -14,7 +14,7 @@ export default function PortalHeader() {
         <span className="wordmarkText">ai</span>
       </Link>
       <nav className="portalNav">
-        <Link className={isAdmin ? 'navLink active' : 'navLink'} to="/admin">
+        <Link className={isAdmin ? 'navLink createLinkNav active' : 'navLink createLinkNav'} to="/admin">
           Create Link
         </Link>
         <Link className={isAgents ? 'navLink active' : 'navLink'} to="/admin/agents">
