@@ -228,7 +228,7 @@ function AnalyticsDashboard({ analytics, loading, isOpen, onToggle }) {
                 <StatCard
                   icon="📝"
                   label={t('Analytics fields')}
-                  value={analytics.avg_fields_completed}
+                  value={analytics.total_fields}
                 />
               </div>
             ) : (
