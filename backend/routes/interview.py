@@ -13,7 +13,7 @@ import requests
 import fitz
 
 from routes.gemini import GeminiAuthError, GeminiRateLimitError, GeminiRequestError, run_gemini_json
-from storage import get_agent
+from storage import COMPLETED_DIR, get_agent, save_completed_session
 
 interview_bp = Blueprint("interview", __name__)
 logger = logging.getLogger(__name__)
@@ -24,6 +24,7 @@ class InterviewSession:
     session_id: str
     agent_id: str
     missing_fields: list[str]
+    form_name: str = ""
     field_meta: dict[str, dict] = field(default_factory=dict)
     answers: dict[str, str] = field(default_factory=dict)
     created_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
@@ -240,7 +241,7 @@ def _build_field_question(field_meta: dict) -> str:
     return f"What should I enter for {label}?"
 
 
-def _build_system_prompt(missing_fields: list[str], field_meta: dict[str, dict]) -> str:
+def _build_system_prompt(form_name: str, missing_fields: list[str], field_meta: dict[str, dict]) -> str:
     ordered_fields = json.dumps(
         [
             {
@@ -254,6 +255,7 @@ def _build_system_prompt(missing_fields: list[str], field_meta: dict[str, dict])
     )
     return (
         "You are a voice assistant helping the user fill a form.\n"
+        f'Form title: "{form_name or "Untitled form"}"\n'
         f"Required fields in strict order: {ordered_fields}\n"
         "Rules:\n"
         "1) Ask for exactly one missing field at a time, in order.\n"
@@ -267,9 +269,10 @@ def _build_system_prompt(missing_fields: list[str], field_meta: dict[str, dict])
     )
 
 
-def _build_first_prompt(first_field_meta: dict) -> str:
+def _build_first_prompt(form_name: str, first_field_meta: dict) -> str:
     return (
-        "Hi there. I will help you complete this form one step at a time. "
+        f'Hi there. We are now completing "{form_name or "this form"}". '
+        "I will help you step by step. "
         + _build_field_question(first_field_meta)
     )
 
@@ -365,8 +368,80 @@ def _coerce_value_for_field(field_meta: dict, value: str) -> str:
     return value.strip()
 
 
+def _checkbox_is_yes(value: str) -> bool:
+    return _coerce_checkbox_value(value) == "Yes"
+
+
+def _widget_on_state(widget) -> str:
+    on_state = getattr(widget, "on_state", "")
+    if callable(on_state):
+        on_state = on_state()
+    return str(on_state or "").strip()
+
+
+def _assign_widget_value(widget, value: str) -> None:
+    field_type = str(getattr(widget, "field_type_string", "") or "")
+    text_value = str(value or "").strip()
+
+    if field_type == "CheckBox":
+        widget.field_value = _widget_on_state(widget) if _checkbox_is_yes(text_value) else "Off"
+    elif field_type == "RadioButton":
+        options = _extract_widget_options(widget)
+        mapped = _map_value_to_allowed_option(text_value, options)
+        widget.field_value = mapped or text_value
+    else:
+        widget.field_value = text_value
+
+    widget.update()
+
+
+def _fill_pdf_with_answers(pdf_path: str, answers: dict[str, str]) -> bytes:
+    with fitz.open(pdf_path) as doc:
+        processed_radio_fields: set[str] = set()
+        for page in doc:
+            for widget in page.widgets() or []:
+                field_key = str(getattr(widget, "field_name", "") or "").strip()
+                if field_key and field_key in answers:
+                    field_type = str(getattr(widget, "field_type_string", "") or "")
+                    if field_type == "RadioButton":
+                        if field_key in processed_radio_fields:
+                            continue
+                        processed_radio_fields.add(field_key)
+                    _assign_widget_value(widget, str(answers[field_key]))
+        # Ask viewers to respect updated appearance streams.
+        try:
+            doc.need_appearances(True)
+        except Exception:
+            pass
+        return doc.write()
+
+
+def _finalize_completed_interview(*, session: InterviewSession, agent: dict) -> dict:
+    pdf_path = str(agent.get("pdf_path", "") or "").strip()
+    if not pdf_path or not os.path.exists(pdf_path):
+        raise RuntimeError("Original PDF file is missing for this agent.")
+
+    filled_pdf_bytes = _fill_pdf_with_answers(pdf_path, session.answers)
+    filled_pdf_path = COMPLETED_DIR / f"{session.session_id}_completed.pdf"
+    filled_pdf_path.write_bytes(filled_pdf_bytes)
+
+    save_completed_session(
+        session_id=session.session_id,
+        agent_id=session.agent_id,
+        answers=session.answers,
+        filled_pdf_path=str(filled_pdf_path),
+    )
+
+    session_id = session.session_id
+    return {
+        "download_url": f"/api/admin/dashboard/sessions/{session_id}/download",
+        "pdf_preview_url": f"/api/admin/dashboard/sessions/{session_id}/pdf",
+    }
+
+
 def _evaluate_turn_with_gemini(
     *,
+    form_name: str,
     current_field: str,
     current_field_meta: dict,
     next_field_meta: dict | None,
@@ -388,6 +463,7 @@ def _evaluate_turn_with_gemini(
 
     prompt = f"""
 You are validating one turn in a voice form interview.
+Form title: "{form_name or "Untitled form"}"
 
 Current field technical key (internal only): "{current_field}"
 Current field label (speak this): "{current_label}"
@@ -466,7 +542,10 @@ def _evaluate_and_update_session(
             "answers": session.answers,
             "intent": "acknowledgment",
             "is_answer_adequate": True,
-            "assistant_response": "Thanks. I have all required information.",
+            "assistant_response": (
+                "Thank you. We have everything we need. "
+                "Your completed form is ready and can be downloaded now."
+            ),
         }
 
     current_field = session.current_field
@@ -489,6 +568,7 @@ def _evaluate_and_update_session(
     )
 
     evaluation = _evaluate_turn_with_gemini(
+        form_name=session.form_name,
         current_field=current_field,
         current_field_meta=current_field_meta,
         next_field_meta=next_field_meta,
@@ -521,7 +601,10 @@ def _evaluate_and_update_session(
         session.updated_at = datetime.now(timezone.utc).isoformat()
 
         if session.completed:
-            assistant_response = assistant_response or "Thanks. We have all missing fields now."
+            assistant_response = assistant_response or (
+                "Thank you. We have everything we need. "
+                "Your completed form is now being generated and will be ready to download shortly."
+            )
         else:
             next_field = session.current_field or "the next field"
             next_field_meta = _field_meta_for(session, next_field)
@@ -554,6 +637,23 @@ def _evaluate_and_update_session(
         "is_answer_adequate": is_answer_adequate,
         "assistant_response": assistant_response,
     }
+
+
+def _attach_completion_artifacts(*, session: InterviewSession, result: dict) -> dict:
+    if not result.get("completed"):
+        return result
+
+    agent = get_agent(session.agent_id)
+    if not agent:
+        logger.warning("Could not finalize completed session %s because agent was not found.", session.session_id)
+        return result
+
+    try:
+        artifacts = _finalize_completed_interview(session=session, agent=agent)
+        result.update(artifacts)
+    except Exception as exc:
+        logger.exception("Failed to finalize completed interview session %s: %s", session.session_id, exc)
+    return result
 
 
 def _synthesize_with_elevenlabs(text: str) -> tuple[bytes, str]:
@@ -633,12 +733,14 @@ def start_interview(agent_id: str) -> tuple:
         return jsonify({"error": "Agent has no fields to interview."}), 400
 
     normalized_fields = [key for key in field_meta.keys() if str(key).strip()]
+    form_name = str(agent.get("agent_name", "")).strip() or "this form"
 
     session_id = uuid.uuid4().hex[:12]
     session = InterviewSession(
         session_id=session_id,
         agent_id=agent_id,
         missing_fields=normalized_fields,
+        form_name=form_name,
         field_meta=field_meta,
     )
     SESSIONS[session_id] = session
@@ -654,8 +756,8 @@ def start_interview(agent_id: str) -> tuple:
                 "missing_fields": session.missing_fields,
                 "answers": session.answers,
                 "completed": session.completed,
-                "system_prompt": _build_system_prompt(session.missing_fields, session.field_meta),
-                "first_prompt": _build_first_prompt(first_field_meta),
+                "system_prompt": _build_system_prompt(session.form_name, session.missing_fields, session.field_meta),
+                "first_prompt": _build_first_prompt(session.form_name, first_field_meta),
             }
         ),
         200,
@@ -687,6 +789,7 @@ def process_interview_turn(agent_id: str) -> tuple:
             user_input=user_input,
             was_interruption=was_interruption,
         )
+        result = _attach_completion_artifacts(session=session, result=result)
         return (
             jsonify(result),
             200,
@@ -769,6 +872,7 @@ def process_interview_turn_audio(agent_id: str) -> tuple:
             user_input=transcript,
             was_interruption=was_interruption,
         )
+        result = _attach_completion_artifacts(session=session, result=result)
 
         assistant_response = str(result.get("assistant_response", "")).strip()
         audio_mime_type = ""

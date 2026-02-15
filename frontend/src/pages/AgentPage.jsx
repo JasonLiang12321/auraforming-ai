@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
-import { getAgentById, speakInterviewText, startGuidedInterview, submitInterviewAudioTurn } from '../services/api'
+import { API_BASE_URL, getAgentById, speakInterviewText, startGuidedInterview, submitInterviewAudioTurn } from '../services/api'
 
 const MIN_RECORDING_MS = 500
 const INTERVIEW_TURN_RESPONSE_SCHEMA = {
@@ -17,11 +17,19 @@ const INTERVIEW_TURN_RESPONSE_SCHEMA = {
     assistant_response: 'string',
     audio_mime_type: 'string',
     audio_base64: 'string',
+    download_url: 'string',
+    pdf_preview_url: 'string',
   },
 }
 
 function buildDataUri(audioMimeType, audioBase64) {
   return `data:${audioMimeType || 'audio/mpeg'};base64,${audioBase64}`
+}
+
+function toApiAbsoluteUrl(path) {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return path
+  return `${API_BASE_URL}${path}`
 }
 
 function createRecorder(stream) {
@@ -188,7 +196,8 @@ export default function AgentPage() {
     activeAudioRef.current = null
   }
 
-  const playAssistantAudio = async (audioMimeType, audioBase64) => {
+  const playAssistantAudio = async (audioMimeType, audioBase64, options = {}) => {
+    const { completed = false } = options
     if (!audioBase64) return
     stopActiveAudio()
 
@@ -220,13 +229,14 @@ export default function AgentPage() {
       activeAudioRef.current = null
     }
 
-    if (!interviewState?.completed) {
+    if (!completed) {
       setMode('listening')
       setStatus('connected')
     }
   }
 
-  const teardownSessionMedia = () => {
+  const teardownSessionMedia = (options = {}) => {
+    const { silent = false } = options
     isHoldingRef.current = false
     stopActiveAudio()
     stopThinkingTone()
@@ -248,7 +258,9 @@ export default function AgentPage() {
 
     chunksRef.current = []
     recordingStartedAtRef.current = 0
-    setMicOn(false)
+    if (!silent) {
+      setMicOn(false)
+    }
   }
 
   const handleTurnError = async (err) => {
@@ -298,7 +310,7 @@ export default function AgentPage() {
       setInterviewState(result)
 
       if (result.audio_base64) {
-        await playAssistantAudio(result.audio_mime_type, result.audio_base64)
+        await playAssistantAudio(result.audio_mime_type, result.audio_base64, { completed: Boolean(result.completed) })
       } else {
         setStatus('connected')
       }
@@ -449,6 +461,22 @@ export default function AgentPage() {
       setStage('welcome')
     }
   }
+
+  useEffect(() => {
+    const stopOnNavigation = () => {
+      teardownSessionMedia({ silent: true })
+    }
+
+    window.addEventListener('popstate', stopOnNavigation)
+    window.addEventListener('pagehide', stopOnNavigation)
+    window.addEventListener('beforeunload', stopOnNavigation)
+
+    return () => {
+      window.removeEventListener('popstate', stopOnNavigation)
+      window.removeEventListener('pagehide', stopOnNavigation)
+      window.removeEventListener('beforeunload', stopOnNavigation)
+    }
+  }, [])
 
   useEffect(() => {
     let isMounted = true
@@ -608,34 +636,52 @@ export default function AgentPage() {
       </section>
 
       <footer className="voiceFooter">
-        <div className="micStack">
-          <button
-            type="button"
-            className={`micHoldButton ${micOn ? 'active' : ''}`}
-            onPointerDown={handleHoldStart}
-            onPointerUp={handleHoldEnd}
-            onPointerLeave={handleHoldEnd}
-            onPointerCancel={handleHoldEnd}
-            onContextMenu={(event) => event.preventDefault()}
-            disabled={
-              Boolean(interviewState?.completed) ||
-              status === 'processing' ||
-              status === 'connecting' ||
-              status === 'error' ||
-              status === 'speaking' ||
-              mode === 'speaking'
-            }
-            aria-label="Hold to talk"
-          >
-            <svg className="micGlyph" viewBox="0 0 24 24" aria-hidden="true">
-              <path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 1 0-8 0v4a4 4 0 0 0 4 4Zm-6-4a1 1 0 0 1 2 0 4 4 0 0 0 8 0 1 1 0 1 1 2 0 6 6 0 0 1-5 5.91V20h2a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2h2v-3.09A6 6 0 0 1 6 11Z" />
-            </svg>
-          </button>
-          <p className="micHint">Hold to talk. Release to send.</p>
-          <button type="button" className="endSessionTextButton" onClick={() => setShowEndConfirm(true)}>
-            End Session
-          </button>
-        </div>
+        {interviewState?.completed ? (
+          <div className="completionActions">
+            {interviewState?.download_url ? (
+              <a className="btnPrimary btnLink" href={toApiAbsoluteUrl(interviewState.download_url)} target="_blank" rel="noreferrer">
+                Download Completed Form
+              </a>
+            ) : null}
+            {interviewState?.pdf_preview_url ? (
+              <a className="btnGhost btnLink" href={toApiAbsoluteUrl(interviewState.pdf_preview_url)} target="_blank" rel="noreferrer">
+                Preview Completed Form
+              </a>
+            ) : null}
+            <button type="button" className="endSessionTextButton" onClick={() => setShowEndConfirm(true)}>
+              End Session
+            </button>
+          </div>
+        ) : (
+          <div className="micStack">
+            <button
+              type="button"
+              className={`micHoldButton ${micOn ? 'active' : ''}`}
+              onPointerDown={handleHoldStart}
+              onPointerUp={handleHoldEnd}
+              onPointerLeave={handleHoldEnd}
+              onPointerCancel={handleHoldEnd}
+              onContextMenu={(event) => event.preventDefault()}
+              disabled={
+                Boolean(interviewState?.completed) ||
+                status === 'processing' ||
+                status === 'connecting' ||
+                status === 'error' ||
+                status === 'speaking' ||
+                mode === 'speaking'
+              }
+              aria-label="Hold to talk"
+            >
+              <svg className="micGlyph" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M12 15a4 4 0 0 0 4-4V7a4 4 0 1 0-8 0v4a4 4 0 0 0 4 4Zm-6-4a1 1 0 0 1 2 0 4 4 0 0 0 8 0 1 1 0 1 1 2 0 6 6 0 0 1-5 5.91V20h2a1 1 0 1 1 0 2H9a1 1 0 1 1 0-2h2v-3.09A6 6 0 0 1 6 11Z" />
+              </svg>
+            </button>
+            <p className="micHint">Hold to talk. Release to send.</p>
+            <button type="button" className="endSessionTextButton" onClick={() => setShowEndConfirm(true)}>
+              End Session
+            </button>
+          </div>
+        )}
 
         {error ? <p className="error">{error}</p> : null}
       </footer>
