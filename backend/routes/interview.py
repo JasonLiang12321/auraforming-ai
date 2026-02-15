@@ -13,7 +13,7 @@ import requests
 import fitz
 
 from routes.gemini import GeminiAuthError, GeminiRateLimitError, GeminiRequestError, run_gemini_json
-from storage import COMPLETED_DIR, get_agent, save_completed_session
+from storage import COMPLETED_DIR, get_agent, save_completed_session, save_session_start
 
 interview_bp = Blueprint("interview", __name__)
 logger = logging.getLogger(__name__)
@@ -1171,6 +1171,9 @@ def start_interview(agent_id: str) -> tuple:
         language_code=selected_language_code,
         language_label=selected_language_label,
     )
+    session.created_at = datetime.now(timezone.utc).isoformat()
+    SESSIONS[session_id] = session
+    save_session_start(session_id, agent_id, session.created_at)
 
     if ENABLE_LABEL_LOCALIZATION and _should_localize_labels(session.language_code):
         try:

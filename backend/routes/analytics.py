@@ -1,5 +1,5 @@
 from flask import Blueprint, jsonify
-from storage import get_completed_sessions, COMPLETED_DIR
+from storage import get_all_sessions_for_agent, get_agent
 from datetime import datetime
 import json
 
@@ -9,55 +9,81 @@ analytics_bp = Blueprint('analytics', __name__)
 def get_agent_analytics(agent_id: str):
     """Get analytics for a specific agent"""
     try:
-        sessions = get_completed_sessions()
-        agent_sessions = [s for s in sessions if s.get('agent_id') == agent_id]
+        # Get agent schema to count total fields
+        agent = get_agent(agent_id)
+        if not agent:
+            return jsonify({'error': 'Agent not found'}), 404
         
-        total_sessions = len(agent_sessions)
-        completed_sessions = total_sessions  # All sessions in this table are completed
-        incomplete_sessions = 0
-        completion_rate = 100.0 if total_sessions > 0 else 0
+        # Count total fields from schema
+        # Replace line 18 with:
+        schema = agent.get('schema', {})
+        if isinstance(schema, dict):
+            # Try interview_fields first (list of dicts with 'key')
+            interview_fields = schema.get('interview_fields', [])
+            if isinstance(interview_fields, list) and interview_fields:
+                total_fields = len([f for f in interview_fields if isinstance(f, dict) and f.get('key')])
+            else:
+                # Fallback to widget_names (list of strings)
+                widget_names = schema.get('widget_names', [])
+                total_fields = len([w for w in widget_names if isinstance(w, str) and w.strip()])
+        else:
+            total_fields = 0
+
         
-        # Calculate average duration
-        durations = []
-        for s in agent_sessions:
-            if s.get('completed_at') and s.get('created_at'):
+       
+        
+        # Get all sessions from all_sessions table
+        all_sessions = get_all_sessions_for_agent(agent_id)
+        
+        # Filter only completed sessions
+        completed_sessions = [s for s in all_sessions if s.get('is_completed')]
+        
+        # Calculate average duration from completed sessions
+        total_duration_seconds = 0
+        valid_duration_count = 0
+        
+        for session in completed_sessions:
+            started_at = session.get('started_at')
+            completed_at = session.get('completed_at')
+            
+            if started_at and completed_at:
                 try:
-                    start = datetime.fromisoformat(s['created_at'].replace('Z', '+00:00'))
-                    end = datetime.fromisoformat(s['completed_at'].replace('Z', '+00:00'))
-                    duration_minutes = (end - start).total_seconds() / 60
-                    if duration_minutes > 0:
-                        durations.append(duration_minutes)
-                except:
-                    pass
+                    start_time = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+                    end_time = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
+                    duration_seconds = (end_time - start_time).total_seconds()
+                    
+                    # Filter out outliers (less than 5 seconds or more than 2 hours)
+                    if 5 < duration_seconds < 7200:
+                        total_duration_seconds += duration_seconds
+                        valid_duration_count += 1
+                        print(f"Session {session.get('session_id')}: {duration_seconds}s")
+                except Exception as e:
+                    print(f"Error calculating duration for session {session.get('session_id')}: {e}")
+                    continue
         
-        avg_duration = f"{round(sum(durations) / len(durations), 1)} min" if durations else "N/A"
+        # Format average duration
+        if valid_duration_count > 0:
+            avg_seconds = total_duration_seconds / valid_duration_count
+            minutes = int(avg_seconds // 60)
+            seconds = int(avg_seconds % 60)
+            avg_duration = f"{minutes}m {seconds}s"
+        else:
+            avg_duration = "N/A"
         
-        # Count total turns (answers)
-        total_turns = sum(len(s.get('answers', {})) for s in agent_sessions)
+        print(f"Analytics for agent {agent_id}:")
+        print(f"  Completed sessions: {len(completed_sessions)}")
+        print(f"  Valid durations: {valid_duration_count}")
+        print(f"  Avg duration: {avg_duration}")
         
-        # Language breakdown
-        languages = {}
-        for s in agent_sessions:
-            lang_code = s.get('language_code', 'en-US')
-            lang_label = s.get('language_label', 'English (US)')
-            if lang_code not in languages:
-                languages[lang_code] = {'code': lang_code, 'label': lang_label, 'count': 0}
-            languages[lang_code]['count'] += 1
-        
-        # Average fields completed
-        field_counts = [len(s.get('answers', {})) for s in agent_sessions if s.get('answers')]
-        avg_fields = round(sum(field_counts) / len(field_counts), 1) if field_counts else 0
-        
-        return jsonify({
-            'total_sessions': total_sessions,
-            'completed_sessions': completed_sessions,
-            'incomplete_sessions': incomplete_sessions,
-            'completion_rate': completion_rate,
+        analytics = {
+            'completed_sessions': len(completed_sessions),
+            'total_fields': total_fields,
             'avg_duration': avg_duration,
-            'total_turns': total_turns,
-            'languages': list(languages.values()),
-            'avg_fields_completed': avg_fields
-        })
+        }
+   
+        
+        return jsonify(analytics)
+        
     except Exception as e:
         import traceback
         traceback.print_exc()

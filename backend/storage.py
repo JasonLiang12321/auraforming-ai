@@ -158,6 +158,20 @@ def _safe_data_file(path_value: str) -> Path | None:
         return None
     return path
 
+def save_session_start(session_id: str, agent_id: str, started_at: str) -> None:
+    """Save session start time to metadata file"""
+    metadata_path = COMPLETED_DIR / f"{session_id}.json"
+    
+    metadata = {
+        'session_id': session_id,
+        'agent_id': agent_id,
+        'created_at': started_at,
+        'started_at': started_at,
+        'answers': {},
+    }
+    
+    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False))
+    print(f"🚀 Session {session_id} started at {started_at}")
 
 def delete_agent(agent_id: str) -> dict | None:
     with sqlite3.connect(DB_PATH) as conn:
@@ -223,22 +237,60 @@ def save_completed_session(
     language_code: str = "en-US",
     language_label: str = "English (US)",
 ) -> None:
-    created_at = datetime.now(timezone.utc).isoformat()
+    """Save a completed session"""
+    from datetime import datetime, timezone
     
-    # Save metadata JSON file with language info
+    completed_at = datetime.now(timezone.utc).isoformat()
+    
+    # Load existing metadata to get started_at
+    metadata_path = COMPLETED_DIR / f"{session_id}.json"
+    started_at = None
+    
+    print(f"🔍 Looking for metadata at: {metadata_path}")
+    print(f"   File exists: {metadata_path.exists()}")
+    
+    if metadata_path.exists():
+        try:
+            existing = json.loads(metadata_path.read_text())
+            print(f"📖 Existing metadata: {existing}")
+            started_at = existing.get('started_at') or existing.get('created_at')
+            if started_at:
+                print(f"✅ Found existing start time: {started_at}")
+        except Exception as e:
+            print(f"⚠️  Could not read existing metadata: {e}")
+    
+    # If no start time found, use completed_at (fallback)
+    if not started_at:
+        print(f"⚠️  No start time found, using completed_at as fallback")
+        started_at = completed_at
+    
+    # Calculate duration
+    duration_seconds = 0
+    try:
+        start = datetime.fromisoformat(started_at.replace('Z', '+00:00'))
+        end = datetime.fromisoformat(completed_at.replace('Z', '+00:00'))
+        duration_seconds = (end - start).total_seconds()
+        print(f"⏱️  Calculated duration: {duration_seconds}s")
+    except Exception as e:
+        print(f"⚠️  Could not calculate duration: {e}")
+    
+    # Save complete metadata
     metadata = {
         'session_id': session_id,
         'agent_id': agent_id,
         'answers': answers,
-        'created_at': created_at,
-        'completed_at': created_at,
+        'started_at': started_at,
+        'created_at': started_at,
+        'completed_at': completed_at,
+        'duration_seconds': duration_seconds,
         'language_code': language_code,
         'language_label': language_label,
     }
     
-    metadata_path = COMPLETED_DIR / f"{session_id}.json"
     metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False))
+    print(f"💾 Saved metadata to: {metadata_path}")
     
+    # Save to database
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
@@ -246,37 +298,13 @@ def save_completed_session(
                 (session_id, agent_id, answers_json, filled_pdf_path, created_at)
             VALUES (?, ?, ?, ?, ?)
             """,
-            (session_id, agent_id, json.dumps(answers), filled_pdf_path, created_at),
+            (session_id, agent_id, json.dumps(answers), filled_pdf_path, started_at),
         )
-
-
-def list_completed_sessions(limit: int = 100) -> list[dict]:
-    with sqlite3.connect(DB_PATH) as conn:
-        rows = conn.execute(
-            """
-            SELECT session_id, agent_id, answers_json, filled_pdf_path, created_at
-            FROM completed_sessions
-            ORDER BY created_at DESC
-            LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
-
-    items: list[dict] = []
-    for row in rows:
-        answers = json.loads(row[2])
-        items.append(
-            {
-                "session_id": row[0],
-                "agent_id": row[1],
-                "answers": answers,
-                "field_count": len(answers),
-                "filled_pdf_path": row[3],
-                "created_at": row[4],
-            }
-        )
-    return items
-
+    
+    print(f"✅ Session {session_id} complete:")
+    print(f"   Started:   {started_at}")
+    print(f"   Completed: {completed_at}")
+    print(f"   Duration:  {duration_seconds:.1f}s ({int(duration_seconds // 60)}m {int(duration_seconds % 60)}s)")
 
 def get_completed_session(session_id: str) -> dict | None:
     with sqlite3.connect(DB_PATH) as conn:
@@ -326,5 +354,100 @@ def get_completed_sessions(limit: int = 500) -> list[dict]:
             session['completed_at'] = session['created_at']
         
         session['completed'] = True
+    
+    return sessions
+
+# Add this function at the end of the file (after get_completed_sessions):
+
+def get_all_sessions_for_agent(agent_id: str) -> list[dict]:
+    """Get all sessions for an agent with timing info from JSON metadata files"""
+    sessions = []
+    
+    # Get completed sessions from database
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            """
+            SELECT session_id, agent_id, answers_json, filled_pdf_path, created_at
+            FROM completed_sessions
+            WHERE LOWER(agent_id) = LOWER(?)
+            ORDER BY created_at DESC
+            """,
+            (agent_id,),
+        ).fetchall()
+    
+    # Enrich with metadata from JSON files
+    for row in rows:
+        session_id = row[0]
+        metadata_path = COMPLETED_DIR / f"{session_id}.json"
+        
+        answers = json.loads(row[2])
+        session = {
+            'session_id': session_id,
+            'agent_id': row[1],
+            'answers': answers,
+            'filled_pdf_path': row[3],
+            'created_at': row[4],
+            'is_completed': True,
+            'language_code': 'en-US',
+            'language_label': 'English (US)',
+        }
+        
+        # Try to get start/end times from metadata JSON
+        if metadata_path.exists():
+            try:
+                metadata = json.loads(metadata_path.read_text())
+                session['started_at'] = metadata.get('created_at', row[4])
+                session['completed_at'] = metadata.get('completed_at', row[4])
+                session['language_code'] = metadata.get('language_code', 'en-US')
+                session['language_label'] = metadata.get('language_label', 'English (US)')
+            except Exception:
+                # Fallback - use created_at for both
+                session['started_at'] = row[4]
+                session['completed_at'] = row[4]
+        else:
+            # Fallback - use created_at for both
+            session['started_at'] = row[4]
+            session['completed_at'] = row[4]
+        
+        sessions.append(session)
+    
+    return sessions
+
+# Add this function after save_completed_session (around line 290):
+
+def list_completed_sessions(limit: int = 500) -> list[dict]:
+    """Get all completed sessions with metadata from JSON files"""
+    sessions = []
+    
+    # Get all session JSON files from completed directory
+    if not COMPLETED_DIR.exists():
+        return sessions
+    
+    for json_file in sorted(COMPLETED_DIR.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+        if len(sessions) >= limit:
+            break
+        
+        try:
+            metadata = json.loads(json_file.read_text())
+            session_id = metadata.get('session_id')
+            
+            if not session_id:
+                continue
+            
+            # Enrich with basic info
+            sessions.append({
+                'session_id': session_id,
+                'agent_id': metadata.get('agent_id', ''),
+                'answers': metadata.get('answers', {}),
+                'field_count': len(metadata.get('answers', {})),
+                'created_at': metadata.get('created_at') or metadata.get('started_at', ''),
+                'started_at': metadata.get('started_at', ''),
+                'completed_at': metadata.get('completed_at', ''),
+                'duration_seconds': metadata.get('duration_seconds', 0),
+                'language_code': metadata.get('language_code', 'en-US'),
+                'language_label': metadata.get('language_label', 'English (US)'),
+            })
+        except Exception as e:
+            continue
     
     return sessions
