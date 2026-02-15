@@ -1,8 +1,9 @@
 export const UI_MESSAGES = {
   en: {
-    nav_create_link: 'Create Link',
-    nav_agents: 'Agents',
+    nav_create_link: 'Create Agent',
+    nav_agents: 'My Agents',
     nav_intakes: 'Intakes',
+    nav_join: 'Join Interview',
     nav_language_label: 'Language',
 
     loading_agents: 'Loading agents...',
@@ -40,7 +41,7 @@ export const UI_MESSAGES = {
     admin_hero_text: 'Upload once, share a private link, and review completed intakes in one place.',
     admin_open_latest_agent: 'Open Latest Agent',
 
-    upload_title: 'Create a Client Interview Link',
+    upload_title: 'Create a Client Form',
     upload_subtitle: 'Drop a fillable PDF and we will prepare a warm, guided experience for your client.',
     upload_agent_name: 'Agent Name',
     upload_agent_name_placeholder: 'e.g. Acme Onboarding Form',
@@ -71,7 +72,7 @@ export const UI_MESSAGES = {
     agents_manage_subtitle: 'Select any agent row to view its latest client intakes.',
     agents_count_one: '{count} agent',
     agents_count_many: '{count} agents',
-    agents_empty: 'No agents yet. Create one from the Create Link tab.',
+    agents_empty: 'No agents yet. Create one from the Create Form tab.',
     agents_field_count: 'Fields: {count}',
     agents_created: 'Created: {value}',
     agents_untitled: 'Untitled Agent',
@@ -173,9 +174,10 @@ export const UI_MESSAGES = {
     err_mic_default: 'We could not start the interview yet. Please check microphone permission and try again.',
   },
   es: {
-    nav_create_link: 'Crear enlace',
-    nav_agents: 'Agentes',
+    nav_create_link: 'Create Agent',
+    nav_agents: 'My Agents',
     nav_intakes: 'Registros',
+    nav_join: 'Join Interview',
     nav_language_label: 'Idioma',
 
     loading_agents: 'Cargando agentes...',
@@ -217,9 +219,10 @@ export const UI_MESSAGES = {
     agent_intakes_preview_title: 'Vista previa del registro {id}',
   },
   fr: {
-    nav_create_link: 'Créer un lien',
-    nav_agents: 'Agents',
+    nav_create_link: 'Create Agent',
+    nav_agents: 'My Agents',
     nav_intakes: 'Dossiers',
+    nav_join: 'Join Interview',
     nav_language_label: 'Langue',
 
     loading_agents: 'Chargement des agents...',
@@ -261,9 +264,10 @@ export const UI_MESSAGES = {
     agent_intakes_preview_title: 'Aperçu du dossier {id}',
   },
   de: {
-    nav_create_link: 'Link erstellen',
-    nav_agents: 'Agenten',
+    nav_create_link: 'Create Agent',
+    nav_agents: 'My Agents',
     nav_intakes: 'Aufnahmen',
+    nav_join: 'Join Interview',
     nav_language_label: 'Sprache',
 
     loading_agents: 'Agenten werden geladen...',
@@ -305,9 +309,10 @@ export const UI_MESSAGES = {
     agent_intakes_preview_title: 'Vorschau Aufnahme {id}',
   },
   it: {
-    nav_create_link: 'Crea link',
-    nav_agents: 'Agenti',
+    nav_create_link: 'Create Agent',
+    nav_agents: 'My Agents',
     nav_intakes: 'Pratiche',
+    nav_join: 'Join Interview',
     nav_language_label: 'Lingua',
 
     loading_agents: 'Caricamento agenti...',
@@ -349,9 +354,10 @@ export const UI_MESSAGES = {
     agent_intakes_preview_title: 'Anteprima pratica {id}',
   },
   pt: {
-    nav_create_link: 'Criar link',
-    nav_agents: 'Agentes',
+    nav_create_link: 'Create Agent',
+    nav_agents: 'My Agents',
     nav_intakes: 'Registros',
+    nav_join: 'Join Interview',
     nav_language_label: 'Idioma',
 
     loading_agents: 'Carregando agentes...',
@@ -393,9 +399,10 @@ export const UI_MESSAGES = {
     agent_intakes_preview_title: 'Pré-visualização do registro {id}',
   },
   ja: {
-    nav_create_link: 'リンク作成',
-    nav_agents: 'エージェント',
+    nav_create_link: 'Create Agent',
+    nav_agents: 'My Agents',
     nav_intakes: '記録',
+    nav_join: 'Join Interview',
     nav_language_label: '言語',
 
     loading_agents: 'エージェントを読み込み中...',
@@ -437,9 +444,10 @@ export const UI_MESSAGES = {
     agent_intakes_preview_title: '記録 {id} のプレビュー',
   },
   ko: {
-    nav_create_link: '링크 만들기',
-    nav_agents: '에이전트',
+    nav_create_link: 'Create Agent',
+    nav_agents: 'My Agents',
     nav_intakes: '기록',
+    nav_join: 'Join Interview',
     nav_language_label: '언어',
 
     loading_agents: '에이전트를 불러오는 중...',
@@ -481,9 +489,10 @@ export const UI_MESSAGES = {
     agent_intakes_preview_title: '기록 {id} 미리보기',
   },
   hi: {
-    nav_create_link: 'लिंक बनाएं',
-    nav_agents: 'एजेंट',
+    nav_create_link: 'Create Agent',
+    nav_agents: 'My Agents',
     nav_intakes: 'रिकॉर्ड',
+    nav_join: 'Join Interview',
     nav_language_label: 'भाषा',
 
     loading_agents: 'एजेंट लोड हो रहे हैं...',
@@ -525,9 +534,10 @@ export const UI_MESSAGES = {
     agent_intakes_preview_title: 'रिकॉर्ड {id} प्रीव्यू',
   },
   ru: {
-    nav_create_link: 'Создать ссылку',
-    nav_agents: 'Агенты',
+    nav_create_link: 'Create Agent',
+    nav_agents: 'My Agents',
     nav_intakes: 'Анкеты',
+    nav_join: 'Join Interview',
     nav_language_label: 'Язык',
 
     loading_agents: 'Загрузка агентов...',
@@ -556,7 +566,7 @@ export const UI_MESSAGES = {
     admin_hero_text: 'Загрузите один раз, поделитесь приватной ссылкой и просматривайте анкеты в одном месте.',
     admin_open_latest_agent: 'Открыть последнего агента',
 
-    upload_title: 'Создать ссылку для клиента',
+    upload_title: 'Создать форму для клиента',
     upload_subtitle: 'Перетащите заполняемый PDF, и мы подготовим дружелюбное голосовое интервью.',
     upload_agent_name: 'Название агента',
     upload_agent_name_placeholder: 'например, Acme Onboarding Form',
@@ -587,7 +597,7 @@ export const UI_MESSAGES = {
     agents_manage_subtitle: 'Выберите агента, чтобы увидеть последние клиентские анкеты.',
     agents_count_one: '{count} агент',
     agents_count_many: '{count} агентов',
-    agents_empty: 'Пока нет агентов. Создайте его во вкладке "Создать ссылку".',
+    agents_empty: 'Пока нет агентов. Создайте его во вкладке "Создать форму".',
     agents_field_count: 'Поля: {count}',
     agents_created: 'Создано: {value}',
     agents_untitled: 'Без названия',
@@ -689,9 +699,10 @@ export const UI_MESSAGES = {
     err_mic_default: 'Не удалось запустить интервью. Проверьте доступ к микрофону и повторите.',
   },
   zh: {
-    nav_create_link: '创建链接',
-    nav_agents: '助手',
+    nav_create_link: 'Create Agent',
+    nav_agents: 'My Agents',
     nav_intakes: '表单记录',
+    nav_join: 'Join Interview',
     nav_language_label: '语言',
 
     loading_agents: '正在加载助手...',
@@ -720,7 +731,7 @@ export const UI_MESSAGES = {
     admin_hero_text: '一次上传，私密分享，并在一个地方查看完成记录。',
     admin_open_latest_agent: '打开最近助手',
 
-    upload_title: '创建客户访谈链接',
+    upload_title: '创建客户表单',
     upload_subtitle: '拖拽可填写 PDF，我们将准备友好的语音引导流程。',
     upload_agent_name: '助手名称',
     upload_agent_name_placeholder: '例如：Acme Onboarding Form',
@@ -751,7 +762,7 @@ export const UI_MESSAGES = {
     agents_manage_subtitle: '选择任一助手查看其最新客户记录。',
     agents_count_one: '{count} 个助手',
     agents_count_many: '{count} 个助手',
-    agents_empty: '还没有助手。请先在“创建链接”页面创建。',
+    agents_empty: '还没有助手。请先在“创建表单”页面创建。',
     agents_field_count: '字段：{count}',
     agents_created: '创建时间：{value}',
     agents_untitled: '未命名助手',

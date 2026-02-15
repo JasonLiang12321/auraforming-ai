@@ -1,6 +1,8 @@
 import logging
+from io import BytesIO
 from pathlib import Path
 
+import fitz
 from flask import Blueprint, jsonify, send_file
 
 from storage import DATA_DIR, get_completed_session, list_completed_sessions
@@ -42,6 +44,19 @@ def _safe_pdf_path(path_value: str) -> Path | None:
     return path
 
 
+def _flatten_preview_pdf(path: Path) -> bytes:
+    with fitz.open(str(path)) as source_doc:
+        flattened_doc = fitz.open()
+        matrix = fitz.Matrix(1.35, 1.35)
+        for source_page in source_doc:
+            target_page = flattened_doc.new_page(width=source_page.rect.width, height=source_page.rect.height)
+            pix = source_page.get_pixmap(matrix=matrix, alpha=False)
+            target_page.insert_image(target_page.rect, stream=pix.tobytes("png"))
+        output = flattened_doc.write()
+        flattened_doc.close()
+    return output
+
+
 @dashboard_bp.get("/admin/dashboard/sessions/<session_id>/pdf")
 def preview_pdf(session_id: str):
     session = get_completed_session(session_id)
@@ -53,7 +68,13 @@ def preview_pdf(session_id: str):
         logger.warning("Missing or invalid PDF path for session_id=%s", session_id)
         return jsonify({"error": "Filled PDF not found."}), 404
 
-    return send_file(pdf_path, mimetype="application/pdf", as_attachment=False)
+    try:
+        preview_bytes = _flatten_preview_pdf(pdf_path)
+    except Exception as exc:
+        logger.exception("Failed to flatten preview PDF for session_id=%s: %s", session_id, exc)
+        return jsonify({"error": "Could not render preview PDF."}), 500
+
+    return send_file(BytesIO(preview_bytes), mimetype="application/pdf", as_attachment=False)
 
 
 @dashboard_bp.get("/admin/dashboard/sessions/<session_id>/download")

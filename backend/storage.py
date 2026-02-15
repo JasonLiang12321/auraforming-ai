@@ -86,9 +86,18 @@ def list_agents(limit: int = 200) -> list[dict]:
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
-            SELECT agent_id, agent_name, pdf_path, schema_json, created_at
-            FROM agents
-            ORDER BY created_at DESC
+            SELECT
+                a.agent_id,
+                a.agent_name,
+                a.pdf_path,
+                a.schema_json,
+                a.created_at,
+                COUNT(cs.session_id) AS intake_count
+            FROM agents AS a
+            LEFT JOIN completed_sessions AS cs
+                ON LOWER(cs.agent_id) = LOWER(a.agent_id)
+            GROUP BY a.agent_id, a.agent_name, a.pdf_path, a.schema_json, a.created_at
+            ORDER BY a.created_at DESC
             LIMIT ?
             """,
             (limit,),
@@ -105,6 +114,7 @@ def list_agents(limit: int = 200) -> list[dict]:
                 "pdf_path": row[2],
                 "schema": schema,
                 "field_count": len(widget_names) if isinstance(widget_names, list) else 0,
+                "intake_count": int(row[5] or 0),
                 "created_at": row[4],
                 "share_url": f"/agent/{row[0]}",
             }
@@ -210,8 +220,25 @@ def save_completed_session(
     agent_id: str,
     answers: dict[str, str],
     filled_pdf_path: str,
+    language_code: str = "en-US",
+    language_label: str = "English (US)",
 ) -> None:
     created_at = datetime.now(timezone.utc).isoformat()
+    
+    # Save metadata JSON file with language info
+    metadata = {
+        'session_id': session_id,
+        'agent_id': agent_id,
+        'answers': answers,
+        'created_at': created_at,
+        'completed_at': created_at,
+        'language_code': language_code,
+        'language_label': language_label,
+    }
+    
+    metadata_path = COMPLETED_DIR / f"{session_id}.json"
+    metadata_path.write_text(json.dumps(metadata, indent=2, ensure_ascii=False))
+    
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
@@ -274,3 +301,30 @@ def get_completed_session(session_id: str) -> dict | None:
         "filled_pdf_path": row[3],
         "created_at": row[4],
     }
+
+def get_completed_sessions(limit: int = 500) -> list[dict]:
+    """Get all completed sessions with enriched metadata from JSON files"""
+    sessions = list_completed_sessions(limit)
+    
+    # Enrich with metadata from JSON files
+    for session in sessions:
+        metadata_path = COMPLETED_DIR / f"{session['session_id']}.json"
+        if metadata_path.exists():
+            try:
+                metadata = json.loads(metadata_path.read_text())
+                session['language_code'] = metadata.get('language_code', 'en-US')
+                session['language_label'] = metadata.get('language_label', 'English (US)')
+                session['completed_at'] = metadata.get('completed_at', session['created_at'])
+            except Exception:
+                # Fallback to defaults
+                session['language_code'] = 'en-US'
+                session['language_label'] = 'English (US)'
+                session['completed_at'] = session['created_at']
+        else:
+            session['language_code'] = 'en-US'
+            session['language_label'] = 'English (US)'
+            session['completed_at'] = session['created_at']
+        
+        session['completed'] = True
+    
+    return sessions
