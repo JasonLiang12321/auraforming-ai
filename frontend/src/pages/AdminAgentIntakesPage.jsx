@@ -210,70 +210,24 @@ function AnalyticsDashboard({ analytics, loading, isOpen, onToggle }) {
               <p className="hint">{t('loading_analytics')}</p>
             ) : analytics ? (
               <div style={styles.analyticsGrid}>
-                <StatCard
-                  icon="📊"
-                  label={t('analytics_total_sessions')}
-                  value={analytics.total_sessions}
-                />
 
                 <StatCard
                   icon="✅"
-                  label={t('analytics_completed')}
+                  label={t('Analytics completed')}
                   value={analytics.completed_sessions}
                   type="completed"
                 />
 
                 <StatCard
-                  icon="⏸️"
-                  label={t('analytics_incomplete')}
-                  value={analytics.incomplete_sessions}
-                  type="incomplete"
-                />
-
-                <StatCard
-                  icon="📈"
-                  label={t('analytics_completion_rate')}
-                  value={`${analytics.completion_rate}%`}
-                  type="rate"
-                >
-                  <div style={styles.progressBar}>
-                    <div
-                      style={{
-                        ...styles.progressFill,
-                        width: `${analytics.completion_rate}%`,
-                      }}
-                    />
-                  </div>
-                </StatCard>
-
-                <StatCard
                   icon="⏱️"
-                  label={t('analytics_avg_duration')}
+                  label={t('Analytics avg duration')}
                   value={analytics.avg_duration}
                 />
 
-                <StatCard
-                  icon="💬"
-                  label={t('analytics_total_turns')}
-                  value={analytics.total_turns}
-                />
-
-                <StatCard
-                  icon="🌍"
-                  label={t('analytics_languages')}
-                >
-                  <div style={styles.languageList}>
-                    {analytics.languages?.map((lang) => (
-                      <span key={lang.code} style={styles.languageBadge}>
-                        {lang.label} ({lang.count})
-                      </span>
-                    )) || <span className="hint">N/A</span>}
-                  </div>
-                </StatCard>
 
                 <StatCard
                   icon="📝"
-                  label={t('analytics_avg_fields')}
+                  label={t('Analytics fields')}
                   value={analytics.avg_fields_completed}
                 />
               </div>
