@@ -307,7 +307,8 @@ export default function LandingPage() {
   }
 
   return (
-    <main className={`landingShell ${shellPhase} intro-${introPhase}`} style={shellStyle}>
+    <>
+      <main className={`landingShell ${shellPhase} intro-${introPhase}`} style={shellStyle}>
       <div className="zenBackdrop" aria-hidden="true">
         <span className="zenBlob blobA"></span>
         <span className="zenBlob blobB"></span>
@@ -461,6 +462,49 @@ export default function LandingPage() {
           ) : null}
         </div>
       </section>
+
+      <section className="landingPoweredBy">
+        <div className="poweredByContainer">
+          <h2 className="poweredByTitle">{t('landing_powered_by')}</h2>
+          <div className="poweredByLogos">
+            <span className="poweredByLogo geminiLogo">Gemini</span>
+            <span className="poweredByLogo elevenlabsLogo">IIElevenLabs</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="landingAccessibility">
+        <div className="accessibilityContainer">
+          <h2 className="accessibilityTitle">{t('landing_accessibility')}</h2>
+          <ul className="accessibilityList">
+            <li className="accessibilityItem">{t('landing_accessibility_languages')}</li>
+            <li className="accessibilityItem">{t('landing_accessibility_platform')}</li>
+            <li className="accessibilityItem">{t('landing_accessibility_input')}</li>
+            <li className="accessibilityItem">{t('landing_accessibility_resilient')}</li>
+            <li className="accessibilityItem">{t('landing_accessibility_privacy')}</li>
+          </ul>
+        </div>
+      </section>
     </main>
+
+    <footer className="landingFooter">
+      <div className="footerContent">
+        <div className="footerItem">
+          <span className="footerLabel">{t('footer_address_label')}:</span>
+          <span className="footerValue">{t('footer_address')}</span>
+        </div>
+        <div className="footerDivider"></div>
+        <div className="footerItem">
+          <span className="footerLabel">{t('footer_phone_label')}:</span>
+          <span className="footerValue">{t('footer_phone')}</span>
+        </div>
+        <div className="footerDivider"></div>
+        <div className="footerItem">
+          <span className="footerLabel">{t('footer_email_label')}:</span>
+          <span className="footerValue">{t('footer_email')}</span>
+        </div>
+      </div>
+    </footer>
+    </>
   )
 }
