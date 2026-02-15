@@ -79,7 +79,7 @@ function formatAgentToken(agentId) {
 }
 
 export default function AgentPage() {
-  const { t, uiLanguage, setUiLanguage } = useI18n()
+  const { t, uiLanguage } = useI18n()
   const { id } = useParams()
 
   const interviewSessionIdRef = useRef('')
@@ -485,7 +485,6 @@ export default function AgentPage() {
       if (guided?.language_code) {
         const normalized = normalizeLanguageCode(guided.language_code)
         setInterviewLanguage(normalized)
-        setUiLanguage(normalized)
       }
 
       setStage('active')
@@ -723,7 +722,6 @@ export default function AgentPage() {
                 onChange={(event) => {
                   const nextLanguage = normalizeLanguageCode(event.target.value)
                   setInterviewLanguage(nextLanguage)
-                  setUiLanguage(nextLanguage)
                 }}
                 disabled={status === 'connecting'}
               >

@@ -43,6 +43,7 @@ class InterviewSession:
 
 SESSIONS: dict[str, InterviewSession] = {}
 ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1"
+ENABLE_LABEL_LOCALIZATION = os.getenv("ENABLE_INTERVIEW_LABEL_LOCALIZATION", "").strip().lower() in {"1", "true", "yes"}
 SUPPORTED_INTERVIEW_LANGUAGES: dict[str, str] = {
     "en-US": "English (US)",
     "en-GB": "English (UK)",
@@ -1086,7 +1087,7 @@ def start_interview(agent_id: str) -> tuple:
         language_label=selected_language_label,
     )
 
-    if _should_localize_labels(session.language_code):
+    if ENABLE_LABEL_LOCALIZATION and _should_localize_labels(session.language_code):
         try:
             localized_labels = _localize_field_labels_with_gemini(
                 field_meta=session.field_meta,

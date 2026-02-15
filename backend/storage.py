@@ -86,9 +86,18 @@ def list_agents(limit: int = 200) -> list[dict]:
     with sqlite3.connect(DB_PATH) as conn:
         rows = conn.execute(
             """
-            SELECT agent_id, agent_name, pdf_path, schema_json, created_at
-            FROM agents
-            ORDER BY created_at DESC
+            SELECT
+                a.agent_id,
+                a.agent_name,
+                a.pdf_path,
+                a.schema_json,
+                a.created_at,
+                COUNT(cs.session_id) AS intake_count
+            FROM agents AS a
+            LEFT JOIN completed_sessions AS cs
+                ON LOWER(cs.agent_id) = LOWER(a.agent_id)
+            GROUP BY a.agent_id, a.agent_name, a.pdf_path, a.schema_json, a.created_at
+            ORDER BY a.created_at DESC
             LIMIT ?
             """,
             (limit,),
@@ -105,6 +114,7 @@ def list_agents(limit: int = 200) -> list[dict]:
                 "pdf_path": row[2],
                 "schema": schema,
                 "field_count": len(widget_names) if isinstance(widget_names, list) else 0,
+                "intake_count": int(row[5] or 0),
                 "created_at": row[4],
                 "share_url": f"/agent/{row[0]}",
             }

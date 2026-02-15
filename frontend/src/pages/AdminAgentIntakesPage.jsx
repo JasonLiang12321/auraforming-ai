@@ -10,27 +10,54 @@ function toApiAbsoluteUrl(path) {
   return `${API_BASE_URL}${path}`
 }
 
-function PdfPreviewModal({ session, onClose }) {
+function formatAgentToken(agentId) {
+  const raw = String(agentId || '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '')
+  if (raw.length <= 4) return raw
+  return `${raw.slice(0, 4)}-${raw.slice(4, 8)}`
+}
+
+function PdfPreviewModal({ session, formName, onClose }) {
   const { t } = useI18n()
   if (!session) return null
 
   return (
-    <div className="modalBackdrop" onClick={onClose}>
-      <section className="sessionModal previewOnly" onClick={(event) => event.stopPropagation()}>
+    <div className="modalBackdrop fullscreenBackdrop" onClick={onClose}>
+      <section className="sessionModal previewOnly fullscreenModal" onClick={(event) => event.stopPropagation()}>
         <div className="modalHeader">
-          <h2>{t('agent_intakes_preview_title', { id: session.session_id })}</h2>
-          <button type="button" className="btnGhost" onClick={onClose}>
-            {t('page_close')}
+          <div className="modalTitleBlock">
+            <h2 className="modalTitleStrong">{`${session.session_id} - ${formName}`}</h2>
+            <span className="modalIdBadge">{formatAgentToken(session.agent_id)}</span>
+          </div>
+          <button type="button" className="btnGhost modalCloseButton" onClick={onClose}>
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M6.7 5.3a1 1 0 0 1 1.4 0L12 9.17l3.9-3.88a1 1 0 1 1 1.4 1.42L13.4 10.6l3.9 3.9a1 1 0 1 1-1.4 1.4L12 12l-3.88 3.9a1 1 0 1 1-1.42-1.4l3.9-3.9-3.9-3.88a1 1 0 0 1 0-1.42z" />
+            </svg>
+            <span>{t('page_close')}</span>
           </button>
         </div>
 
-        <div className="modalPane previewPane">
-          <p className="paneLabel">{t('dashboard_modal_preview')}</p>
-          <iframe title={`agent-preview-${session.session_id}`} src={toApiAbsoluteUrl(session.pdf_preview_url)} className="pdfFrame" />
-          <div className="previewActions">
-            <a className="btnGhost btnLink" href={toApiAbsoluteUrl(session.pdf_preview_url)} target="_blank" rel="noreferrer">
-              {t('dashboard_modal_open_tab')}
-            </a>
+        <div className="fullscreenPreviewLayout">
+          <div className="modalPane previewPane fullscreenPreviewPane">
+            <p className="paneLabel">{t('dashboard_modal_preview')}</p>
+            <iframe title={`agent-preview-${session.session_id}`} src={toApiAbsoluteUrl(session.pdf_preview_url)} className="pdfFrame fullscreenPdfFrame" />
+            <div className="previewActions previewActionsRight">
+              <a className="btnGhost btnLink previewActionLink" href={toApiAbsoluteUrl(session.pdf_preview_url)} target="_blank" rel="noreferrer">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M14 4a1 1 0 0 0 0 2h2.59l-5.3 5.29a1 1 0 1 0 1.42 1.42L18 7.41V10a1 1 0 1 0 2 0V4h-6z" />
+                  <path d="M6 5a3 3 0 0 0-3 3v10a3 3 0 0 0 3 3h10a3 3 0 0 0 3-3v-4a1 1 0 1 0-2 0v4a1 1 0 0 1-1 1H6a1 1 0 0 1-1-1V8a1 1 0 0 1 1-1h4a1 1 0 0 0 0-2H6z" />
+                </svg>
+                <span>{t('dashboard_modal_open_tab')}</span>
+              </a>
+              <a className="btnPrimary btnLink previewActionLink" href={toApiAbsoluteUrl(session.download_url)} target="_blank" rel="noreferrer">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M12 3a1 1 0 0 1 1 1v8.59l2.3-2.3a1 1 0 1 1 1.4 1.42l-4 4a1 1 0 0 1-1.4 0l-4-4a1 1 0 1 1 1.4-1.42L11 12.59V4a1 1 0 0 1 1-1z" />
+                  <path d="M5 15a1 1 0 0 1 1 1v2a1 1 0 0 0 1 1h10a1 1 0 0 0 1-1v-2a1 1 0 1 1 2 0v2a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-2a1 1 0 0 1 1-1z" />
+                </svg>
+                <span>{t('dashboard_modal_download')}</span>
+              </a>
+            </div>
           </div>
         </div>
       </section>
@@ -108,27 +135,21 @@ export default function AdminAgentIntakesPage() {
               <thead>
                 <tr>
                   <th>{t('dashboard_table_session')}</th>
-                  <th>{t('dashboard_table_fields')}</th>
+                  <th>Form</th>
                   <th>{t('dashboard_table_created')}</th>
-                  <th>{t('agent_intakes_actions')}</th>
                 </tr>
               </thead>
               <tbody>
                 {sessions.map((session) => (
-                  <tr key={session.session_id}>
+                  <tr key={session.session_id} onClick={() => setActivePreviewSession(session)}>
                     <td>{session.session_id}</td>
-                    <td>{session.field_count}</td>
-                    <td>{formatDateTime(session.created_at)}</td>
                     <td>
-                      <div className="tableActionRow">
-                        <button type="button" className="btnGhost" onClick={() => setActivePreviewSession(session)}>
-                          {t('agent_intakes_preview_pdf')}
-                        </button>
-                        <a className="btnGhost btnLink" href={toApiAbsoluteUrl(session.pdf_preview_url)} target="_blank" rel="noreferrer">
-                          {t('agent_intakes_new_tab')}
-                        </a>
+                      <div className="formCell">
+                        <span className="formCellName">{title}</span>
+                        <span className="tableIdBadge">{formatAgentToken(session.agent_id || agentId)}</span>
                       </div>
                     </td>
+                    <td>{formatDateTime(session.created_at)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -137,7 +158,7 @@ export default function AdminAgentIntakesPage() {
         ) : null}
       </section>
 
-      {activePreviewSession ? <PdfPreviewModal session={activePreviewSession} onClose={() => setActivePreviewSession(null)} /> : null}
+      {activePreviewSession ? <PdfPreviewModal session={activePreviewSession} formName={title} onClose={() => setActivePreviewSession(null)} /> : null}
     </main>
   )
 }

@@ -10,6 +10,8 @@ export default function AdminAgentsPage() {
   const [agents, setAgents] = useState([])
   const [loadingAgents, setLoadingAgents] = useState(true)
   const [agentsError, setAgentsError] = useState('')
+  const [pendingDeleteAgent, setPendingDeleteAgent] = useState(null)
+  const [deletingAgentId, setDeletingAgentId] = useState('')
 
   const loadAgents = async () => {
     setLoadingAgents(true)
@@ -28,15 +30,18 @@ export default function AdminAgentsPage() {
     void loadAgents()
   }, [])
 
-  const handleDelete = async (agent) => {
-    const displayName = agent.agent_name?.trim() || t('agents_untitled')
-    const confirmed = window.confirm(t('agents_delete_confirm', { name: displayName }))
-    if (!confirmed) return
+  const confirmDeleteAgent = async () => {
+    if (!pendingDeleteAgent) return
+    const agentToDelete = pendingDeleteAgent
+    setDeletingAgentId(agentToDelete.agent_id)
     try {
-      await deleteAgent(agent.agent_id)
+      await deleteAgent(agentToDelete.agent_id)
+      setPendingDeleteAgent(null)
       await loadAgents()
     } catch (err) {
       setAgentsError(err instanceof Error ? err.message : t('agents_error_delete'))
+    } finally {
+      setDeletingAgentId('')
     }
   }
 
@@ -71,63 +76,89 @@ export default function AdminAgentsPage() {
 
         {agents.length > 0 ? (
           <div className="agentsGrid">
-            {agents.map((agent) => (
-              <article
-                key={agent.agent_id}
-                className="agentTile"
-                role="button"
-                tabIndex={0}
-                onClick={() => navigate(`/admin/agents/${agent.agent_id}/intakes`)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault()
-                    navigate(`/admin/agents/${agent.agent_id}/intakes`)
-                  }
-                }}
-              >
-                <div className="agentTileMain">
-                  <p className="agentTileName">{agent.agent_name || t('agents_untitled')}</p>
-                  <p className="agentTileMeta">
-                    ID <code>{agent.agent_id}</code>
-                  </p>
-                  <p className="agentTileMeta">{t('agents_field_count', { count: agent.field_count })}</p>
-                  <p className="agentTileMeta">{t('agents_created', { value: formatDateTime(agent.created_at) })}</p>
-                </div>
-                <div className="agentTileActions">
-                  <a
-                    className="iconBtn"
-                    href={agent.share_url || `/agent/${encodeURIComponent(agent.agent_id)}`}
-                    target="_blank"
-                    rel="noreferrer"
-                    onClick={(event) => event.stopPropagation()}
-                    aria-label={`${t('agents_open_title')}: ${agent.agent_name || agent.agent_id}`}
-                    title={t('agents_open_title')}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M14 3h7v7h-2V6.4l-9.3 9.3-1.4-1.4L17.6 5H14V3z" />
-                      <path d="M5 5h7v2H7v10h10v-5h2v7H5V5z" />
-                    </svg>
-                  </a>
-                  <button
-                    type="button"
-                    className="iconBtn danger"
-                    onClick={(event) => {
-                      event.stopPropagation()
-                      void handleDelete(agent)
-                    }}
-                    aria-label={`${t('agents_delete_title')}: ${agent.agent_name || agent.agent_id}`}
-                    title={t('agents_delete_title')}
-                  >
-                    <svg viewBox="0 0 24 24" aria-hidden="true">
-                      <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-2 6h10l-1 11H8L7 9z" />
-                    </svg>
-                  </button>
-                </div>
-              </article>
-            ))}
+            {agents.map((agent) => {
+              const intakeCount = Number.isFinite(Number(agent.intake_count)) ? Number(agent.intake_count) : 0
+              return (
+                <article
+                  key={agent.agent_id}
+                  className="agentTile"
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/admin/agents/${agent.agent_id}/intakes`)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault()
+                      navigate(`/admin/agents/${agent.agent_id}/intakes`)
+                    }
+                  }}
+                >
+                  <div className="agentTileMain">
+                    <div className="agentTileHeading">
+                      <p className="agentTileName">{agent.agent_name || t('agents_untitled')}</p>
+                      <p className="agentTileIdBadge">
+                        <code>{agent.agent_id}</code>
+                      </p>
+                    </div>
+                    <p className="agentTileMeta">
+                      {intakeCount === 1 ? t('agent_intakes_count_one', { count: intakeCount }) : t('agent_intakes_count_many', { count: intakeCount })}
+                    </p>
+                    <p className="agentTileMeta">{t('agents_created', { value: formatDateTime(agent.created_at) })}</p>
+                  </div>
+                  <div className="agentTileActions">
+                    <a
+                      className="iconBtn"
+                      href={agent.share_url || `/agent/${encodeURIComponent(agent.agent_id)}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      onClick={(event) => event.stopPropagation()}
+                      aria-label={`${t('agents_open_title')}: ${agent.agent_name || agent.agent_id}`}
+                      title={t('agents_open_title')}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 3h6l1.2 2H19a1 1 0 011 1v14a1 1 0 01-1 1H5a1 1 0 01-1-1V6a1 1 0 011-1h2.8L9 3zm0.6 2-.6 1H6v12h12V6h-3.2l-.6-1H9.6z" />
+                        <path d="M8 10h8v1.6H8zm0 3.2h8v1.6H8z" />
+                      </svg>
+                    </a>
+                    <button
+                      type="button"
+                      className="iconBtn danger"
+                      onClick={(event) => {
+                        event.stopPropagation()
+                        setPendingDeleteAgent(agent)
+                      }}
+                      aria-label={`${t('agents_delete_title')}: ${agent.agent_name || agent.agent_id}`}
+                      title={t('agents_delete_title')}
+                      disabled={deletingAgentId === agent.agent_id}
+                    >
+                      <svg viewBox="0 0 24 24" aria-hidden="true">
+                        <path d="M9 3h6l1 2h4v2H4V5h4l1-2zm-2 6h10l-1 11H8L7 9z" />
+                      </svg>
+                    </button>
+                  </div>
+                </article>
+              )
+            })}
           </div>
         ) : null}
       </section>
+
+      {pendingDeleteAgent ? (
+        <div className="confirmOverlay" role="dialog" aria-modal="true" aria-label={t('agents_delete_title')}>
+          <div className="confirmDialog">
+            <p className="eyebrow">{t('agent_confirm')}</p>
+            <h3>{t('agents_delete_title')}</h3>
+            <p>{t('agents_delete_confirm', { name: pendingDeleteAgent.agent_name?.trim() || t('agents_untitled') })}</p>
+            <div className="confirmActions">
+              <button type="button" className="btnGhost" onClick={() => setPendingDeleteAgent(null)} disabled={Boolean(deletingAgentId)}>
+                {t('page_back')}
+              </button>
+              <button type="button" className="btnPrimary" onClick={() => void confirmDeleteAgent()} disabled={Boolean(deletingAgentId)}>
+                {deletingAgentId ? t('upload_prepare') : t('agents_delete_title')}
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </main>
   )
 }

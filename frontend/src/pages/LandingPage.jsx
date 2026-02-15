@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link, useLocation, useNavigate } from 'react-router-dom'
+import LanguagePicker from '../components/LanguagePicker'
 import { getAgentById } from '../services/api'
 import { useI18n } from '../i18n/I18nProvider'
 
@@ -35,9 +36,14 @@ function renderWordmarkLetters(text, startIndex = 0) {
 export default function LandingPage() {
   const { t, uiLanguage, setUiLanguage, supportedLanguages } = useI18n()
   const navigate = useNavigate()
+  const location = useLocation()
   const CODE_LENGTH = 8
+  const isPhoneViewport = typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches
+  const isJoinRequested = location.pathname === '/join' || new URLSearchParams(location.search).get('join') === '1'
   const [stage, setStage] = useState('hero')
-  const [introPhase, setIntroPhase] = useState('intro')
+  const [isPhone, setIsPhone] = useState(() => isPhoneViewport)
+  const [introPhase, setIntroPhase] = useState(() => (isPhoneViewport || isJoinRequested ? 'ready' : 'intro'))
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [codeChars, setCodeChars] = useState(Array.from({ length: CODE_LENGTH }, () => ''))
   const [clientError, setClientError] = useState('')
   const [clientStatus, setClientStatus] = useState('idle')
@@ -82,6 +88,41 @@ export default function LandingPage() {
   }, [introTarget])
 
   useEffect(() => {
+    const mediaQuery = window.matchMedia('(max-width: 700px)')
+    const handleBreakpointChange = (event) => setIsPhone(event.matches)
+
+    setIsPhone(mediaQuery.matches)
+    if (typeof mediaQuery.addEventListener === 'function') {
+      mediaQuery.addEventListener('change', handleBreakpointChange)
+      return () => mediaQuery.removeEventListener('change', handleBreakpointChange)
+    }
+
+    mediaQuery.addListener(handleBreakpointChange)
+    return () => mediaQuery.removeListener(handleBreakpointChange)
+  }, [])
+
+  useEffect(() => {
+    if (!isJoinRequested) return
+    setIntroPhase('ready')
+    setClientError('')
+    setCodeChars(Array.from({ length: CODE_LENGTH }, () => ''))
+    setClientStatus('idle')
+    setStage('client')
+  }, [CODE_LENGTH, isJoinRequested])
+
+  useEffect(() => {
+    if (!isPhone) return
+    setIntroPhase('ready')
+  }, [isPhone])
+
+  useEffect(() => {
+    if (!isPhone) {
+      setMobileMenuOpen(false)
+    }
+  }, [isPhone])
+
+  useEffect(() => {
+    if (isPhone || isJoinRequested) return
     const dockTimer = window.setTimeout(() => setIntroPhase('dock'), 1300)
     const headerTimer = window.setTimeout(() => setIntroPhase('header'), 2050)
     const readyTimer = window.setTimeout(() => setIntroPhase('ready'), 2850)
@@ -91,7 +132,7 @@ export default function LandingPage() {
       window.clearTimeout(headerTimer)
       window.clearTimeout(readyTimer)
     }
-  }, [])
+  }, [isJoinRequested, isPhone])
 
   useEffect(() => {
     const updateIntroTarget = () => {
@@ -260,6 +301,11 @@ export default function LandingPage() {
     setStage('client')
   }
 
+  const openJoinFromHeader = () => {
+    chooseClient()
+    setMobileMenuOpen(false)
+  }
+
   return (
     <main className={`landingShell ${shellPhase} intro-${introPhase}`} style={shellStyle}>
       <div className="zenBackdrop" aria-hidden="true">
@@ -278,34 +324,48 @@ export default function LandingPage() {
 
       <section className="landingTopbar" aria-hidden={!(introPhase === 'header' || introPhase === 'ready')}>
         <header className="landingHeaderPanel">
-          <div className="landingHeaderBrandSlot" aria-hidden="true">
-            <span ref={brandTargetRef} className="landingHeaderBrandGhost landingBrandWordmark wordmark">
+          <div className="landingHeaderBrandSlot">
+            <Link ref={brandTargetRef} className="landingHeaderBrandLink landingBrandWordmark wordmark" to="/" aria-label="auraforming.ai" onClick={goToStepOne}>
               <span className="wordmarkText">{renderWordmarkLetters('auraforming', 0)}</span>
               <span className="wordmarkOrb" aria-hidden="true"></span>
               <span className="wordmarkText">{renderWordmarkLetters('ai', 12)}</span>
-            </span>
+            </Link>
           </div>
-          <nav className="landingHeaderNavGhost">
-            <Link className="landingHeaderNavLink" to="/admin">
-              {t('nav_create_link')}
-            </Link>
-            <Link className="landingHeaderNavLink" to="/admin/agents">
-              {t('nav_agents')}
-            </Link>
-            <Link className="landingHeaderNavLink" to="/admin/dashboard">
-              {t('nav_intakes')}
-            </Link>
-          </nav>
-          <label className="landingHeaderLanguageSelect">
-            <span>{t('nav_language_label')}</span>
-            <select value={uiLanguage} onChange={(event) => setUiLanguage(event.target.value)}>
-              {supportedLanguages.map((language) => (
-                <option key={language.code} value={language.code}>
-                  {language.label}
-                </option>
-              ))}
-            </select>
-          </label>
+          <button
+            type="button"
+            className={mobileMenuOpen ? 'landingHeaderMenuButton open' : 'landingHeaderMenuButton'}
+            aria-label="Menu"
+            aria-expanded={mobileMenuOpen}
+            onClick={() => setMobileMenuOpen((open) => !open)}
+          >
+            <span></span>
+            <span></span>
+            <span></span>
+          </button>
+          <div className={mobileMenuOpen ? 'landingHeaderControls open' : 'landingHeaderControls'}>
+            <nav className="landingHeaderNavGhost">
+              <Link className="landingHeaderNavLink" to="/admin" onClick={() => setMobileMenuOpen(false)}>
+                {t('nav_create_link')}
+              </Link>
+              <Link className="landingHeaderNavLink" to="/admin/agents" onClick={() => setMobileMenuOpen(false)}>
+                {t('nav_agents')}
+              </Link>
+              <button
+                type="button"
+                className={stage === 'client' ? 'landingHeaderNavLink landingHeaderNavButton active' : 'landingHeaderNavLink landingHeaderNavButton'}
+                onClick={openJoinFromHeader}
+              >
+                {t('nav_join')}
+              </button>
+            </nav>
+            <LanguagePicker
+              className="landingHeaderLanguageSelect"
+              ariaLabel={t('nav_language_label')}
+              uiLanguage={uiLanguage}
+              setUiLanguage={setUiLanguage}
+              supportedLanguages={supportedLanguages}
+            />
+          </div>
         </header>
       </section>
 
@@ -356,9 +416,6 @@ export default function LandingPage() {
 
           {stage === 'client' ? (
             <div className="landingStage clientStage">
-              <button type="button" className="gatewayBack" onClick={() => setStage('intent')}>
-                {t('page_back')}
-              </button>
               <h2 className="intentTitle">{t('landing_enter_form_id')}</h2>
 
               <div className="idEntryRow" onPaste={handlePaste}>
