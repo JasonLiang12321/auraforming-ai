@@ -14,7 +14,7 @@ export default function AdminPage() {
         <p className="eyebrow adminEyebrow">Business Portal</p>
         <h1>Give Clients a Calm, Guided Way to Complete Complex Forms</h1>
         <p className="heroText">
-          Upload a blank form once, share a private interview link, and review completed sessions in one place.
+          Upload a fillable PDF form and we'll automatically generate a private interview link. Complete and review sessions seamlessly with any microphone.
         </p>
         <div className="heroActions">
           <Link className="btnPrimary btnLink" to="/admin/dashboard">

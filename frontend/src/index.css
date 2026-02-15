@@ -177,7 +177,7 @@ code {
 .heroText {
   margin: 0;
   color: var(--text-soft);
-  max-width: 68ch;
+  max-width: 100%;
 }
 
 .heroActions {
