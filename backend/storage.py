@@ -20,12 +20,19 @@ def init_storage() -> None:
             """
             CREATE TABLE IF NOT EXISTS agents (
                 agent_id TEXT PRIMARY KEY,
+                agent_name TEXT NOT NULL DEFAULT '',
                 pdf_path TEXT NOT NULL,
                 schema_json TEXT NOT NULL,
                 created_at TEXT NOT NULL
             )
             """
         )
+        columns = {
+            row[1]
+            for row in conn.execute("PRAGMA table_info(agents)").fetchall()
+        }
+        if "agent_name" not in columns:
+            conn.execute("ALTER TABLE agents ADD COLUMN agent_name TEXT NOT NULL DEFAULT ''")
         conn.execute(
             """
             CREATE TABLE IF NOT EXISTS completed_sessions (
@@ -40,15 +47,15 @@ def init_storage() -> None:
         )
 
 
-def save_agent(agent_id: str, pdf_path: str, schema: dict) -> None:
+def save_agent(agent_id: str, pdf_path: str, schema: dict, agent_name: str = "") -> None:
     created_at = datetime.now(timezone.utc).isoformat()
     with sqlite3.connect(DB_PATH) as conn:
         conn.execute(
             """
-            INSERT INTO agents (agent_id, pdf_path, schema_json, created_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO agents (agent_id, agent_name, pdf_path, schema_json, created_at)
+            VALUES (?, ?, ?, ?, ?)
             """,
-            (agent_id, pdf_path, json.dumps(schema), created_at),
+            (agent_id, agent_name, pdf_path, json.dumps(schema), created_at),
         )
 
 
@@ -56,7 +63,7 @@ def get_agent(agent_id: str) -> dict | None:
     with sqlite3.connect(DB_PATH) as conn:
         row = conn.execute(
             """
-            SELECT agent_id, pdf_path, schema_json, created_at
+            SELECT agent_id, agent_name, pdf_path, schema_json, created_at
             FROM agents
             WHERE LOWER(agent_id) = LOWER(?)
             """,
@@ -68,9 +75,132 @@ def get_agent(agent_id: str) -> dict | None:
 
     return {
         "agent_id": row[0],
-        "pdf_path": row[1],
-        "schema": json.loads(row[2]),
-        "created_at": row[3],
+        "agent_name": row[1] or "",
+        "pdf_path": row[2],
+        "schema": json.loads(row[3]),
+        "created_at": row[4],
+    }
+
+
+def list_agents(limit: int = 200) -> list[dict]:
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            """
+            SELECT agent_id, agent_name, pdf_path, schema_json, created_at
+            FROM agents
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+
+    agents: list[dict] = []
+    for row in rows:
+        schema = json.loads(row[3])
+        widget_names = schema.get("widget_names", [])
+        agents.append(
+            {
+                "agent_id": row[0],
+                "agent_name": row[1] or "",
+                "pdf_path": row[2],
+                "schema": schema,
+                "field_count": len(widget_names) if isinstance(widget_names, list) else 0,
+                "created_at": row[4],
+                "share_url": f"/agent/{row[0]}",
+            }
+        )
+    return agents
+
+
+def list_completed_sessions_by_agent(agent_id: str, limit: int = 200) -> list[dict]:
+    with sqlite3.connect(DB_PATH) as conn:
+        rows = conn.execute(
+            """
+            SELECT session_id, agent_id, answers_json, filled_pdf_path, created_at
+            FROM completed_sessions
+            WHERE LOWER(agent_id) = LOWER(?)
+            ORDER BY created_at DESC
+            LIMIT ?
+            """,
+            (agent_id, limit),
+        ).fetchall()
+
+    items: list[dict] = []
+    for row in rows:
+        answers = json.loads(row[2])
+        items.append(
+            {
+                "session_id": row[0],
+                "agent_id": row[1],
+                "answers": answers,
+                "field_count": len(answers),
+                "filled_pdf_path": row[3],
+                "created_at": row[4],
+            }
+        )
+    return items
+
+
+def _safe_data_file(path_value: str) -> Path | None:
+    path = Path(path_value).resolve()
+    data_root = DATA_DIR.resolve()
+    if not str(path).startswith(str(data_root)):
+        return None
+    return path
+
+
+def delete_agent(agent_id: str) -> dict | None:
+    with sqlite3.connect(DB_PATH) as conn:
+        agent_row = conn.execute(
+            """
+            SELECT agent_id, pdf_path
+            FROM agents
+            WHERE LOWER(agent_id) = LOWER(?)
+            """,
+            (agent_id,),
+        ).fetchone()
+        if not agent_row:
+            return None
+
+        session_rows = conn.execute(
+            """
+            SELECT filled_pdf_path
+            FROM completed_sessions
+            WHERE LOWER(agent_id) = LOWER(?)
+            """,
+            (agent_id,),
+        ).fetchall()
+
+        conn.execute(
+            """
+            DELETE FROM completed_sessions
+            WHERE LOWER(agent_id) = LOWER(?)
+            """,
+            (agent_id,),
+        )
+        conn.execute(
+            """
+            DELETE FROM agents
+            WHERE LOWER(agent_id) = LOWER(?)
+            """,
+            (agent_id,),
+        )
+
+    deleted_files = 0
+    candidate_paths = [agent_row[1], *[row[0] for row in session_rows]]
+    for raw_path in candidate_paths:
+        safe_path = _safe_data_file(raw_path)
+        if safe_path and safe_path.exists() and safe_path.is_file():
+            try:
+                safe_path.unlink()
+                deleted_files += 1
+            except OSError:
+                continue
+
+    return {
+        "agent_id": agent_row[0],
+        "deleted_sessions": len(session_rows),
+        "deleted_files": deleted_files,
     }
 
 

@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 export default function PortalHeader() {
   const location = useLocation()
   const isAdmin = location.pathname === '/admin'
+  const isAgents = location.pathname.startsWith('/admin/agents')
   const isDashboard = location.pathname.startsWith('/admin/dashboard')
 
   return (
@@ -16,10 +17,12 @@ export default function PortalHeader() {
         <Link className={isAdmin ? 'navLink createLinkNav active' : 'navLink createLinkNav'} to="/admin">
           Create Link
         </Link>
-        <Link className={isDashboard ? 'navLink active' : 'navLink'} to="/admin/dashboard">
-          Sessions
+        <Link className={isAgents ? 'navLink active' : 'navLink'} to="/admin/agents">
+          Agents
         </Link>
-        <span className="navHint">SECURE, GUIDED CLIENT EXPERIENCE</span>
+        <Link className={isDashboard ? 'navLink active' : 'navLink'} to="/admin/dashboard">
+          Intakes
+        </Link>
       </nav>
     </header>
   )
