@@ -307,7 +307,8 @@ export default function LandingPage() {
   }
 
   return (
-    <main className={`landingShell ${shellPhase} intro-${introPhase}`} style={shellStyle}>
+    <>
+      <main className={`landingShell ${shellPhase} intro-${introPhase}`} style={shellStyle}>
       <div className="zenBackdrop" aria-hidden="true">
         <span className="zenBlob blobA"></span>
         <span className="zenBlob blobB"></span>
@@ -376,20 +377,35 @@ export default function LandingPage() {
               <h1 className="landingTitle">{t('landing_title')}</h1>
               <p className="landingSubtitle">{t('landing_subtitle')}</p>
 
-              <div className="simulationFrame" aria-hidden="true">
-                <div className="videoOrb"></div>
-                <div className="demoLines">
-                  <p>{t('landing_demo_client')}</p>
-                  <p>{t('landing_demo_assistant_1')}</p>
-                  <p>{t('landing_demo_assistant_2')}</p>
-                  <p>{t('landing_demo_assistant_3')}</p>
-                </div>
-              </div>
-
               <div className="beginFocus">
                 <button type="button" className="beginButton" onClick={goToIntent}>
                   {t('landing_begin')}
                 </button>
+              </div>
+
+              <div className="heroColumns">
+                <div className="heroColumn heroColumnText">
+                  <h2 className="heroColumnTitle">{t('landing_column_title')}</h2>
+                  <ul className="heroFeatureList">
+                    <li className="heroFeatureItem">{t('landing_feature_voice_text')}</li>
+                    <li className="heroFeatureItem">{t('landing_feature_clarify')}</li>
+                    <li className="heroFeatureItem">{t('landing_feature_enterprise')}</li>
+                    <li className="heroFeatureItem">{t('landing_feature_business')}</li>
+                    <li className="heroFeatureItem">{t('landing_feature_resilient')}</li>
+                    <li className="heroFeatureItem">{t('landing_feature_centralized')}</li>
+                  </ul>
+                </div>
+                <div className="heroColumn heroColumnDemo">
+                  <div className="simulationFrame" aria-hidden="true">
+                    <div className="videoOrb"></div>
+                    <div className="demoLines">
+                      <p>{t('landing_demo_client')}</p>
+                      <p>{t('landing_demo_assistant_1')}</p>
+                      <p>{t('landing_demo_client_2')}</p>
+                      <p>{t('landing_demo_assistant_4')}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
@@ -446,6 +462,49 @@ export default function LandingPage() {
           ) : null}
         </div>
       </section>
+
+      <section className="landingPoweredBy">
+        <div className="poweredByContainer">
+          <h2 className="poweredByTitle">{t('landing_powered_by')}</h2>
+          <div className="poweredByLogos">
+            <span className="poweredByLogo geminiLogo">Gemini</span>
+            <span className="poweredByLogo elevenlabsLogo">IIElevenLabs</span>
+          </div>
+        </div>
+      </section>
+
+      <section className="landingAccessibility">
+        <div className="accessibilityContainer">
+          <h2 className="accessibilityTitle">{t('landing_accessibility')}</h2>
+          <ul className="accessibilityList">
+            <li className="accessibilityItem">{t('landing_accessibility_languages')}</li>
+            <li className="accessibilityItem">{t('landing_accessibility_platform')}</li>
+            <li className="accessibilityItem">{t('landing_accessibility_input')}</li>
+            <li className="accessibilityItem">{t('landing_accessibility_resilient')}</li>
+            <li className="accessibilityItem">{t('landing_accessibility_privacy')}</li>
+          </ul>
+        </div>
+      </section>
     </main>
+
+    <footer className="landingFooter">
+      <div className="footerContent">
+        <div className="footerItem">
+          <span className="footerLabel">{t('footer_address_label')}:</span>
+          <span className="footerValue">{t('footer_address')}</span>
+        </div>
+        <div className="footerDivider"></div>
+        <div className="footerItem">
+          <span className="footerLabel">{t('footer_phone_label')}:</span>
+          <span className="footerValue">{t('footer_phone')}</span>
+        </div>
+        <div className="footerDivider"></div>
+        <div className="footerItem">
+          <span className="footerLabel">{t('footer_email_label')}:</span>
+          <span className="footerValue">{t('footer_email')}</span>
+        </div>
+      </div>
+    </footer>
+    </>
   )
 }
