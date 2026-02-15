@@ -11,7 +11,7 @@ export default function AdminPage() {
       <PortalHeader />
 
       <section className="hero">
-        <p className="eyebrow">Business Portal</p>
+        <p className="eyebrow adminEyebrow">Business Portal</p>
         <h1>Give Clients a Calm, Guided Way to Complete Complex Forms</h1>
         <p className="heroText">
           Upload a blank form once, share a private interview link, and review completed sessions in one place.

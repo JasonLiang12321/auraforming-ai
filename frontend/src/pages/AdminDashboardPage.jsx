@@ -89,7 +89,7 @@ export default function AdminDashboardPage() {
     <main className="pageShell">
       <PortalHeader />
       <section className="hero">
-        <p className="eyebrow">Client Sessions</p>
+        <p className="eyebrow adminEyebrow">Client Sessions</p>
         <h1>Completed Conversations</h1>
         <p className="heroText">Open any session to review the captured data and the completed form side by side.</p>
       </section>
