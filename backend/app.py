@@ -11,7 +11,7 @@ from routes.interview import interview_bp
 from routes.dashboard import dashboard_bp
 from routes.submission import submission_bp
 from storage import get_agent, init_storage
-
+from routes.analytics import analytics_bp
 from routes.gemini import gemini_bp
 
 def create_app() -> Flask:
@@ -31,6 +31,7 @@ def create_app() -> Flask:
     app.register_blueprint(dashboard_bp, url_prefix="/api")
     app.register_blueprint(agent_bp, url_prefix="/api")
     app.register_blueprint(submission_bp, url_prefix="/api")
+    app.register_blueprint(analytics_bp)
     
     return app
 
