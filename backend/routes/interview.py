@@ -748,6 +748,8 @@ def _finalize_completed_interview(*, session: InterviewSession, agent: dict) -> 
         agent_id=session.agent_id,
         answers=session.answers,
         filled_pdf_path=str(filled_pdf_path),
+        language_code=session.language_code,     
+        language_label=session.language_label, 
     )
 
     session_id = session.session_id
@@ -757,11 +759,44 @@ def _finalize_completed_interview(*, session: InterviewSession, agent: dict) -> 
     }
 
 
+# Add these helper functions after line 220 (_build_field_meta):
+
+def _group_related_fields(field_meta: dict[str, dict]) -> dict[str, list[str]]:
+    """Group fields by base name (removes [0], [1] indices)"""
+    field_groups = {}
+    for field_key in field_meta.keys():
+        base_name = re.sub(r'\[\d+\]$', '', field_key)
+        if base_name not in field_groups:
+            field_groups[base_name] = []
+        field_groups[base_name].append(field_key)
+    return field_groups
+
+
+def _build_grouped_field_question(base_name: str, fields: list[str], field_meta: dict[str, dict], language_code: str = "en-US") -> str:
+    """Build question for a group of related fields"""
+    if len(fields) == 1:
+        # Single field, use regular question
+        return _build_field_question(field_meta[fields[0]], language_code)
+    
+    # Multiple fields - checkbox group
+    first_field_meta = field_meta[fields[0]]
+    label = _display_label(first_field_meta, language_code)
+    options = [f.split('.')[-1] for f in fields]
+    copy = _copy_for_language(language_code)
+    
+    # Build multi-select question
+    options_text = ", ".join(options)
+    return f'For "{label}", which of these apply? Options: {options_text}. Select all that apply.'
+
+
+# Replace _evaluate_turn_with_gemini function (line 733) with this:
+
 def _evaluate_turn_with_gemini(
     *,
     form_name: str,
     current_field: str,
     current_field_meta: dict,
+    related_fields: list[str],  # NEW: all fields in this group
     next_field_meta: dict | None,
     user_input: str,
     missing_fields: list[dict],
@@ -773,6 +808,12 @@ def _evaluate_turn_with_gemini(
     current_label = _display_label(current_field_meta, language_code)
     current_type = str(current_field_meta.get("type", "Text")).strip() or "Text"
     current_options = current_field_meta.get("options", []) if isinstance(current_field_meta.get("options"), list) else []
+    
+    # NEW: Handle grouped fields
+    is_grouped = len(related_fields) > 1
+    if is_grouped:
+        current_options = [f.split('.')[-1] for f in related_fields]
+    
     next_label = ""
     next_type = ""
     next_options: list[str] = []
@@ -789,6 +830,7 @@ Required assistant response language: "{language_label}" (BCP-47 code "{language
 Current field technical key (internal only): "{current_field}"
 Current field label (speak this): "{current_label}"
 Current field type: "{current_type}"
+{'This is a multi-select field group.' if is_grouped else ''}
 Current field allowed options (if any): {json.dumps(current_options)}
 Next field label (if current is accepted): "{next_label}"
 Next field type (if current is accepted): "{next_type}"
@@ -803,10 +845,13 @@ Return STRICT JSON:
   "intent": "data|clarification|acknowledgment|barge_in",
   "is_answer_adequate": true/false,
   "normalized_value": "string (empty if inadequate)",
+  "collected_values": ["array of selected options for multi-select"],
   "assistant_response": "short spoken response"
 }}
 
 Rules:
+- For multi-select fields, return ALL selected options in collected_values array
+- Example: User says "A and C" → collected_values: ["A", "C"]
 - Mark as adequate ONLY when user clearly provided the value for the current field label.
 - Never speak or repeat the technical key; always use the label.
 - normalized_value is what will be written into the PDF and it must be English.
@@ -834,22 +879,21 @@ Rules:
                 "intent": {"type": "string", "enum": ["data", "clarification", "acknowledgment", "barge_in"]},
                 "is_answer_adequate": {"type": "boolean"},
                 "normalized_value": {"type": "string"},
+                "collected_values": {"type": "array", "items": {"type": "string"}},
                 "assistant_response": {"type": "string"},
             },
             "required": ["intent", "is_answer_adequate", "normalized_value", "assistant_response"],
         },
     )
+    
+    # NEW: Store collected_values for grouped fields
+    if is_grouped and response.get("collected_values"):
+        response["related_fields"] = related_fields
+    
     return response
 
 
-def _require_session(agent_id: str, session_id: str) -> InterviewSession | tuple:
-    session = SESSIONS.get(session_id)
-    if not session:
-        return jsonify({"error": "Interview session not found."}), 404
-    if session.agent_id != agent_id:
-        return jsonify({"error": "Session does not match agent_id."}), 400
-    return session
-
+# Update _evaluate_and_update_session function (line 873) to handle grouped fields:
 
 def _evaluate_and_update_session(
     *,
@@ -877,18 +921,26 @@ def _evaluate_and_update_session(
     current_field = session.current_field
     if not current_field:
         raise RuntimeError("No active field in session.")
+    
     current_field_meta = _field_meta_for(session, current_field)
     current_label = _display_label(current_field_meta, session.language_code)
+    
+    # NEW: Get field groups and find related fields
+    field_groups = _group_related_fields(session.field_meta)
+    base_name = re.sub(r'\[\d+\]$', '', current_field)
+    related_fields = field_groups.get(base_name, [current_field])
+    
     next_field_meta = None
-    if len(session.missing_fields) > 1:
-        next_field_key = session.missing_fields[1]
+    if len(session.missing_fields) > len(related_fields):
+        next_field_key = session.missing_fields[len(related_fields)]
         next_field_meta = _field_meta_for(session, next_field_key)
 
     logger.info(
-        "Interview turn received agent_id=%s session_id=%s current_field=%s interruption=%s user_input=%s",
+        "Interview turn received agent_id=%s session_id=%s current_field=%s related_fields=%s interruption=%s user_input=%s",
         agent_id,
         session.session_id,
         current_field,
+        related_fields,
         was_interruption,
         user_input[:240],
     )
@@ -897,6 +949,7 @@ def _evaluate_and_update_session(
         form_name=session.form_name,
         current_field=current_field,
         current_field_meta=current_field_meta,
+        related_fields=related_fields,  # NEW
         next_field_meta=next_field_meta,
         user_input=user_input,
         missing_fields=[
@@ -917,17 +970,29 @@ def _evaluate_and_update_session(
     intent = str(evaluation.get("intent", "clarification"))
     is_answer_adequate = bool(evaluation.get("is_answer_adequate", False))
     raw_normalized_value = str(evaluation.get("normalized_value", "")).strip()
-    normalized_value = _coerce_value_for_field(current_field_meta, raw_normalized_value)
+    collected_values = evaluation.get("collected_values", [])
     assistant_response = str(evaluation.get("assistant_response", "")).strip()
 
-    if is_answer_adequate and not normalized_value:
-        is_answer_adequate = False
-
-    if is_answer_adequate and normalized_value:
-        session.answers[current_field] = normalized_value
-        session.missing_fields = session.missing_fields[1:]
+    # NEW: Handle grouped field answers
+    if is_answer_adequate and collected_values and len(related_fields) > 1:
+        # Map collected values to related fields
+        for i, field_key in enumerate(related_fields):
+            if i < len(collected_values):
+                session.answers[field_key] = collected_values[i]
+            else:
+                session.answers[field_key] = ""
+        session.missing_fields = session.missing_fields[len(related_fields):]
         session.updated_at = datetime.now(timezone.utc).isoformat()
+    elif is_answer_adequate and raw_normalized_value:
+        normalized_value = _coerce_value_for_field(current_field_meta, raw_normalized_value)
+        if normalized_value:
+            session.answers[current_field] = normalized_value
+            session.missing_fields = session.missing_fields[1:]
+            session.updated_at = datetime.now(timezone.utc).isoformat()
+        else:
+            is_answer_adequate = False
 
+    if is_answer_adequate:
         if session.completed:
             if not assistant_response:
                 assistant_response = copy["completed_generating"]
@@ -1129,6 +1194,22 @@ def start_interview(agent_id: str) -> tuple:
         200,
     )
 
+
+# Add this function after _finalize_completed_interview (around line 700):
+
+def _require_session(agent_id: str, session_id: str) -> InterviewSession | tuple:
+    """Validate and return session, or return error tuple"""
+    if not session_id:
+        return jsonify({"error": "Missing session_id"}), 400
+    
+    session = SESSIONS.get(session_id)
+    if not session:
+        return jsonify({"error": "Session not found or expired"}), 404
+    
+    if session.agent_id != agent_id:
+        return jsonify({"error": "Session does not belong to this agent"}), 403
+    
+    return session
 
 @interview_bp.post("/agent/<agent_id>/interview/turn")
 def process_interview_turn(agent_id: str) -> tuple:

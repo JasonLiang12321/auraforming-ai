@@ -106,79 +106,6 @@ def run_gemini_json(*, prompt: str, response_schema: dict, model_name: str | Non
         raise GeminiRequestError(f"Gemini request failed: {message}") from exc
 
 
-@gemini_bp.post("/gemini")
-def gemini_endpoint():
-    try:
-        data = request.get_json(silent=True) or {}
-        agent_id = str(data.get("agent_id", "")).strip()
-        user_input = str(data.get("user_input", "")).strip()
-        form_field = str(data.get("form_field", "")).strip()
-        field_context = str(data.get("field_context", "")).strip()
-
-        if not agent_id or not user_input or not form_field:
-            return jsonify({"error": "Missing agent_id, user_input, or form_field"}), 400
-
-        agent = get_agent(agent_id)
-        if not agent:
-            return jsonify({"error": "Agent not found"}), 404
-
-        required_keys = agent["schema"].get("widget_names", [])
-        if not required_keys:
-            return jsonify({"error": "Agent has no form fields"}), 400
-
-        prompt = f"""You are an AI assistant helping users fill out a form. Analyze the user's input and determine the next action.
-
-Form field: "{form_field}"
-Field context: "{field_context}"
-User input: "{user_input}"
-
-Respond with JSON:
-{{
-"collected_value": "the extracted value if data is collected, empty string otherwise",
-"intent": "clarification|acknowledgment|data",
-"response": "your conversational response to the user"
-}}
-
-STRICT Rules:
-- ONLY set intent to "data" if the user clearly provided THEIR OWN information for THIS specific field
-- If the information is ambiguous, unclear, or about someone else, set intent to "clarification"
-- If user asked a question, set intent to "clarification" and explain
-- If user acknowledged understanding, set intent to "acknowledgment" and re-ask the question
-- For "{form_field}" ({field_context}): user must explicitly state THEIR personal data
-- Do NOT assume or infer information
-- When in doubt, ask for clarification"""
-
-        result = run_gemini_json(
-            prompt=prompt,
-            response_schema={
-                "type": "object",
-                "properties": {
-                    "collected_value": {"type": "string"},
-                    "intent": {"type": "string", "enum": ["clarification", "acknowledgment", "data"]},
-                    "response": {"type": "string"},
-                },
-                "required": ["collected_value", "intent", "response"],
-            },
-        )
-
-        return (
-            jsonify(
-                {
-                    "data_collected": result.get("intent") == "data",
-                    "collected_value": result.get("collected_value", ""),
-                    "response": result.get("response", ""),
-                }
-            ),
-            200,
-        )
-    except json.JSONDecodeError:
-        logger.exception("Gemini JSON parsing failed.")
-        return jsonify({"error": "Invalid JSON from Gemini API"}), 500
-    except Exception as exc:
-        logger.exception("Gemini endpoint failure: %s", exc)
-        return jsonify({"error": str(exc)}), 500
-
-
 @gemini_bp.post("/gemini/questions")
 def generate_all_questions():
     try:
@@ -193,36 +120,96 @@ def generate_all_questions():
             return jsonify({"error": "Agent not found"}), 404
 
         form_fields = agent["schema"].get("widget_names", [])
+        interview_fields = agent["schema"].get("interview_fields", [])  # ADD THIS
+        
         if not form_fields:
             return jsonify({"error": "Agent has no form fields"}), 400
 
         if not GEMINI_API_KEY:
             return jsonify({"error": "Missing GEMINI_API_KEY"}), 500
 
-        fields_str = "\n".join([f"{index + 1}. {field}" for index, field in enumerate(form_fields)])
-        prompt = f"""Generate natural, conversational questions for these form fields. Return ONLY the questions in plain text, one per line, in the same order.
+        # Build field metadata map
+        field_metadata = {}
+        for field_info in interview_fields:
+            field_name = field_info.get("name", "")
+            field_metadata[field_name] = field_info
+        
+        # Group related fields by base name
+        field_groups = {}
+        for field in form_fields:
+            base_name = re.sub(r'\[\d+\]$', '', field)
+            if base_name not in field_groups:
+                field_groups[base_name] = []
+            field_groups[base_name].append(field)
+        
+        # Format groups with their options
+        grouped_fields_list = []
+        for base_name, fields in field_groups.items():
+            # Check if first field has metadata with options
+            first_field = fields[0]
+            metadata = field_metadata.get(first_field, {})
+            options = metadata.get("options", [])
+            
+            if len(fields) > 1:
+                # Multiple fields (checkboxes)
+                options = [f.split('.')[-1] for f in fields]
+                grouped_fields_list.append(f"- {base_name} (options: {', '.join(options)})")
+            elif options:
+                # Dropdown with options in metadata
+                grouped_fields_list.append(f"- {base_name} (options: {', '.join(options)})")
+            else:
+                # Single field without options
+                grouped_fields_list.append(f"- {base_name}")
+        
+        fields_str = "\n".join(grouped_fields_list)
+        
+        prompt = f"""Generate natural, conversational questions for these form field GROUPS.
+For fields with multiple options (checkboxes/radio buttons/dropdowns), ask ONE question covering ALL options.
 
-Form fields:
+Form field groups:
 {fields_str}
 
+IMPORTANT: 
+- For multi-option groups, ask "Which of these apply?" or "Select all that apply:" or "Which option?"
+- For dropdowns, say "Which option from: A, B, C?"
+- DO NOT ask separate yes/no questions for each option
+- List all available options in the question
+
+Example:
+Bad: "Do you identify as Hispanic?"
+Good: "Which ethnicities apply to you? Options: Hispanic, Asian, Black, White, Other"
+Good: "Which state are you from? Options: CA, NY, TX, FL"
+
+Return ONLY the questions in plain text, one per group, in the same order.
+
 Requirements:
-- One question per line
-- 1-2 sentences max per question
-- NO numbering, NO explanations, just questions
+- One question per group
+- 1-2 sentences max
+- NO numbering, NO explanations
 - Plain text only"""
 
         model = genai.GenerativeModel(model_name=GEMINI_MODEL)
         response = model.generate_content(prompt)
-        questions = [line.strip() for line in response.text.strip().split("\n") if line.strip()]
-
-        questions_map = {field: question for field, question in zip(form_fields, questions)}
-        return jsonify({"questions": questions_map, "form_fields": form_fields}), 200
+        questions_list = [line.strip() for line in response.text.strip().split("\n") if line.strip()]
+        
+        # Map each generated question to ALL fields in its group
+        questions_map = {}
+        for (base_name, fields), question in zip(field_groups.items(), questions_list):
+            for field in fields:
+                questions_map[field] = question
+        
+        return jsonify({
+            "questions": questions_map,
+            "form_fields": form_fields,
+            "field_groups": field_groups
+        }), 200
     except Exception as exc:
         logger.exception("Gemini questions endpoint failure: %s", exc)
         return jsonify({"error": str(exc)}), 500
 
 
 @gemini_bp.post("/gemini/ui-translations")
+
 def translate_ui_messages():
     try:
         data = request.get_json(silent=True) or {}
