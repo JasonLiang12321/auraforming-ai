@@ -215,7 +215,7 @@ export default function LandingPage() {
 
           {stage === 'intent' ? (
             <div className="landingStage intentStage">
-              <p className="eyebrow">Step 2</p>
+              <p className="eyebrow stepTwoLabel">Step 2</p>
               <h2 className="intentTitle">How can we help you today?</h2>
 
               <div className="gatewayCards">
@@ -239,7 +239,7 @@ export default function LandingPage() {
               <button type="button" className="gatewayBack" onClick={() => setStage('intent')}>
                 Back
               </button>
-              <p className="eyebrow">Step 3</p>
+              <p className="eyebrow stepThreeLabel">Step 3</p>
               <h2 className="intentTitle">Please enter your unique Form ID.</h2>
 
               <div className="idEntryRow" onPaste={handlePaste}>
