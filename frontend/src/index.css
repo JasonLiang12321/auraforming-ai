@@ -277,12 +277,11 @@ select {
 .landingShell {
   --intro-home-scale: 2.72;
   min-height: 100vh;
-  height: 100dvh;
   width: 100%;
   position: relative;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  overflow-y: auto;
   padding: 1rem 1rem 0;
 }
 
@@ -395,16 +394,21 @@ select {
 }
 
 .landingTopbar {
-  position: relative;
-  z-index: 1;
-  width: min(1180px, 100%);
-  margin: 1.1rem auto 2.2rem;
+  position: fixed;
+  top: 0;
+  left: 0;
+  z-index: 5;
+  width: 100%;
+  margin: 0;
+  padding: 1.1rem 1rem 0;
   display: grid;
   place-items: center;
 }
 
 .landingHeaderPanel {
   width: 100%;
+  max-width: 1180px;
+  margin: 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -570,7 +574,7 @@ select {
   flex: 1;
   display: grid;
   place-items: center;
-  overflow: hidden;
+  overflow: visible;
 }
 
 .landingStageCard {
@@ -578,7 +582,6 @@ select {
   width: 100%;
   padding: clamp(0.5rem, 1.8vw, 1.2rem) clamp(0.5rem, 1.8vw, 1.2rem) clamp(1.2rem, 2.4vw, 1.8rem);
   max-height: 100%;
-  overflow: hidden;
 }
 
 .landingLanguageSelect {
@@ -611,6 +614,66 @@ select {
   animation: fadeUp 300ms ease both;
 }
 
+.heroColumns {
+  width: min(1100px, 100%);
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: clamp(1.2rem, 2.8vw, 2.4rem);
+  margin-top: clamp(1.6rem, 3.6vh, 3rem);
+  align-items: start;
+  text-align: left;
+}
+
+.heroColumn {
+  display: grid;
+  gap: 0.6rem;
+}
+
+.heroColumnTitle {
+  margin: 0;
+  font-family: var(--font-serif);
+  font-size: clamp(1.2rem, 2.4vw, 1.6rem);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #9b6f34;
+}
+
+.heroColumnBody {
+  margin: 0;
+  font-family: var(--font-sans);
+  color: var(--text-soft);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+}
+
+.heroFeatureList {
+  margin: 0.2rem 0 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.55rem;
+}
+
+.heroFeatureItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.55rem;
+  color: var(--text-soft);
+  font-size: var(--font-size-md);
+  line-height: 1.5;
+}
+
+.heroFeatureItem::before {
+  content: '';
+  width: 0.4rem;
+  height: 0.4rem;
+  margin-top: 0.45rem;
+  border-radius: 999px;
+  background: radial-gradient(circle, rgba(201, 162, 105, 0.9), rgba(155, 116, 63, 0.95));
+  box-shadow: 0 0 8px -4px rgba(155, 116, 63, 0.9);
+  flex: 0 0 auto;
+}
+
 .heroStage,
 .intentStage,
 .clientStage {
@@ -624,24 +687,27 @@ select {
 .intentStage {
   align-content: start;
   padding-top: clamp(0.4rem, 1.4vh, 1rem);
+  overflow: hidden;
 }
 
 .clientStage {
   align-content: start;
+  overflow: hidden;
   padding-top: clamp(0.2rem, 0.9vh, 0.7rem);
 }
 
 .landingTitle {
-  margin: -0.1rem auto 0.5rem;
+  margin: -0.35rem auto 0.2rem;
   font-family: var(--font-serif);
   font-size: var(--font-size-hero);
   line-height: 0.97;
   letter-spacing: -0.02em;
-  max-width: 11ch;
+  max-width: none;
+  white-space: nowrap;
 }
 
 .landingSubtitle {
-  margin: 0;
+  margin: 0.05rem 0 0;
   color: var(--text-soft);
   font-size: var(--font-size-md);
 }
@@ -653,6 +719,29 @@ select {
   padding: clamp(0.6rem, 2vw, 1.2rem);
   background: linear-gradient(162deg, rgba(255, 251, 245, 0.94), rgba(244, 233, 215, 0.93));
   opacity: 0.95;
+  box-shadow: 0 32px 64px -44px rgba(108, 82, 47, 0.6), 0 12px 28px -22px rgba(108, 82, 47, 0.45);
+}
+
+.heroColumnDemo .simulationFrame {
+  width: 100%;
+  margin: 0 auto;
+}
+
+.heroColumnDemo .demoLines {
+  text-align: left;
+}
+
+.heroColumnDemo {
+  display: flex;
+  align-items: center;
+}
+
+.heroColumnText {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  min-height: 100%;
+  text-align: left;
 }
 
 .beginFocus {
@@ -660,7 +749,8 @@ select {
   display: grid;
   justify-items: center;
   gap: 0.2rem;
-  margin-top: 0.4rem;
+  margin-top: 2.4rem;
+  margin-bottom: 3rem;
 }
 
 .beginFocus::before {
@@ -679,16 +769,44 @@ select {
   z-index: 1;
   margin-top: 0;
   min-width: 0;
-  width: min(100%, 340px);
+  width: min(100%, 380px);
   border-radius: 999px;
-  padding: 1.05rem 2.25rem;
+  padding: 1.25rem 2.5rem;
   color: #1f1408;
   background: linear-gradient(135deg, #f0d19f, #b88643 65%, #9d6f34 100%);
   border-color: rgba(186, 133, 64, 0.88);
-  box-shadow: 0 16px 38px -18px rgba(155, 107, 49, 0.78), 0 0 0 0 rgba(201, 162, 105, 0.5);
-  animation: pulseRing 1.6s ease-in-out infinite;
-  font-size: var(--font-size-base);
+  box-shadow: 0 8px 24px -4px rgba(155, 107, 49, 0.64), 0 4px 12px -2px rgba(155, 107, 49, 0.48);
+  font-family: var(--font-sans);
+  font-size: var(--font-size-lg);
+  font-weight: 700;
   letter-spacing: 0.11em;
+  transition: transform 220ms ease, box-shadow 220ms ease;
+  overflow: hidden;
+}
+
+.beginButton::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: -100%;
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(255, 255, 255, 0.4) 50%,
+    transparent
+  );
+}
+
+.beginButton:hover::before {
+  animation: buttonShine 0.8s ease-in-out;
+}
+
+.beginButton:hover {
+  transform: translateY(-6px) scale(1.03);
+  box-shadow: 0 16px 38px -8px rgba(155, 107, 49, 0.78), 0 8px 18px -4px rgba(155, 107, 49, 0.62), 0 0 0 0 rgba(201, 162, 105, 0.5);
+  animation: pulseRing 1.6s ease-in-out infinite;
 }
 
 .gatewayCards {
@@ -845,7 +963,7 @@ select {
   width: 84px;
   aspect-ratio: 1;
   border-radius: 50%;
-  margin: 0.14rem auto 0.56rem;
+  margin: 0.14rem auto 1rem;
   background: radial-gradient(circle at 30% 30%, rgba(244, 235, 215, 0.96), rgba(198, 161, 103, 0.95) 52%, rgba(143, 104, 56, 0.96) 100%);
   box-shadow: 0 0 34px -12px rgba(139, 101, 52, 0.92);
   animation: orbTalk 2.1s ease-in-out infinite;
@@ -2325,13 +2443,22 @@ button:disabled {
 
 @keyframes pulseRing {
   0% {
-    box-shadow: 0 0 0 0 rgba(201, 162, 105, 0.5);
+    box-shadow: 0 0 0 0 rgba(201, 162, 105, 0.8);
   }
   70% {
-    box-shadow: 0 0 0 14px rgba(201, 162, 105, 0);
+    box-shadow: 0 0 0 18px rgba(201, 162, 105, 0);
   }
   100% {
     box-shadow: 0 0 0 0 rgba(201, 162, 105, 0);
+  }
+}
+
+@keyframes buttonShine {
+  0% {
+    left: -100%;
+  }
+  100% {
+    left: 100%;
   }
 }
 

@@ -316,20 +316,35 @@ export default function LandingPage() {
               <h1 className="landingTitle">{t('landing_title')}</h1>
               <p className="landingSubtitle">{t('landing_subtitle')}</p>
 
-              <div className="simulationFrame" aria-hidden="true">
-                <div className="videoOrb"></div>
-                <div className="demoLines">
-                  <p>{t('landing_demo_client')}</p>
-                  <p>{t('landing_demo_assistant_1')}</p>
-                  <p>{t('landing_demo_assistant_2')}</p>
-                  <p>{t('landing_demo_assistant_3')}</p>
-                </div>
-              </div>
-
               <div className="beginFocus">
                 <button type="button" className="beginButton" onClick={goToIntent}>
                   {t('landing_begin')}
                 </button>
+              </div>
+
+              <div className="heroColumns">
+                <div className="heroColumn heroColumnText">
+                  <h2 className="heroColumnTitle">{t('landing_column_title')}</h2>
+                  <ul className="heroFeatureList">
+                    <li className="heroFeatureItem">{t('landing_feature_voice_text')}</li>
+                    <li className="heroFeatureItem">{t('landing_feature_clarify')}</li>
+                    <li className="heroFeatureItem">{t('landing_feature_enterprise')}</li>
+                    <li className="heroFeatureItem">{t('landing_feature_business')}</li>
+                    <li className="heroFeatureItem">{t('landing_feature_resilient')}</li>
+                    <li className="heroFeatureItem">{t('landing_feature_centralized')}</li>
+                  </ul>
+                </div>
+                <div className="heroColumn heroColumnDemo">
+                  <div className="simulationFrame" aria-hidden="true">
+                    <div className="videoOrb"></div>
+                    <div className="demoLines">
+                      <p>{t('landing_demo_client')}</p>
+                      <p>{t('landing_demo_assistant_1')}</p>
+                      <p>{t('landing_demo_client_2')}</p>
+                      <p>{t('landing_demo_assistant_4')}</p>
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
           ) : null}
