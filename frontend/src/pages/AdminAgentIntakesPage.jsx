@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useParams } from 'react-router-dom'
 import PortalHeader from '../components/PortalHeader'
 import { useI18n } from '../i18n/I18nProvider'
 import { API_BASE_URL, getAgentById, listAgentSessions } from '../services/api'
@@ -346,11 +346,11 @@ export default function AdminAgentIntakesPage() {
       <PortalHeader />
 
       <section className="hero">
-        <p className="eyebrow">{t('business_portal')}</p>
-        <h1>{title}</h1>
-        <p className="heroText">
-          {t('agent_intakes_viewing')} <Link to="/admin/agents">{t('agent_intakes_back')}</Link>
-        </p>
+        <div className="heroTitleRow">
+          <h1>{title}</h1>
+          <span className="tableIdBadge">{formatAgentToken(agentId)}</span>
+        </div>
+        <p className="heroText">{t('agent_intakes_viewing')}</p>
       </section>
 
       {/* NEW: Analytics Dashboard */}

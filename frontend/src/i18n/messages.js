@@ -133,7 +133,7 @@ export const UI_MESSAGES = {
     agent_gate_text: 'Start your guided voice interview when you are ready.',
     agent_interview_language: 'Interview language',
     agent_requesting_mic: 'Requesting microphone...',
-    agent_start_interview: 'Start My Interview',
+    agent_start_interview: 'Start Interview',
     agent_form_assistant: 'Your Form Assistant',
     agent_toggle_chat: 'Chat',
     agent_toggle_live_pdf: 'Live PDF',

@@ -1,10 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { useNavigate, useParams } from 'react-router-dom'
 import { API_BASE_URL, getAgentById, getAgentLivePreviewPdf, speakInterviewText, startGuidedInterview, submitInterviewAudioTurn } from '../services/api'
 import { useI18n } from '../i18n/I18nProvider'
-import { normalizeLanguageCode, SUPPORTED_LANGUAGES } from '../i18n/languages'
+import { normalizeLanguageCode } from '../i18n/languages'
+import PortalHeader from '../components/PortalHeader'
 
 const MIN_RECORDING_MS = 500
+const WAITING_SOUND_URL = '/sounds/waiting-loop.mp3'
+const WAITING_SOUND_LOOP_END_SEC = 2
+const WAITING_SOUND_VOLUME = 0.5
 const INTERVIEW_TURN_RESPONSE_SCHEMA = {
   type: 'object',
   properties: {
@@ -81,6 +85,7 @@ function formatAgentToken(agentId) {
 export default function AgentPage() {
   const { t, uiLanguage } = useI18n()
   const { id } = useParams()
+  const navigate = useNavigate()
 
   const interviewSessionIdRef = useRef('')
   const mediaStreamRef = useRef(null)
@@ -93,6 +98,7 @@ export default function AgentPage() {
   const recordingInterruptionRef = useRef(false)
   const activeAudioRef = useRef(null)
   const livePreviewRequestRef = useRef(0)
+  const waitingAudioRef = useRef(null)
 
   const toneContextRef = useRef(null)
   const toneNodesRef = useRef(null)
@@ -110,11 +116,23 @@ export default function AgentPage() {
   const [livePreviewEnabled, setLivePreviewEnabled] = useState(false)
   const [livePreviewLoading, setLivePreviewLoading] = useState(false)
   const [livePreviewUrl, setLivePreviewUrl] = useState('')
-  const [chatModeEnabled, setChatModeEnabled] = useState(false)
+  const [chatModeEnabled, setChatModeEnabled] = useState(true)
   const [lastUserSubtitle, setLastUserSubtitle] = useState('')
   const [lastAssistantSubtitle, setLastAssistantSubtitle] = useState('')
 
   const stopThinkingTone = () => {
+    const waitingAudioEntry = waitingAudioRef.current
+    waitingAudioRef.current = null
+    if (waitingAudioEntry?.audio) {
+      try {
+        waitingAudioEntry.audio.removeEventListener('timeupdate', waitingAudioEntry.loopHandler)
+        waitingAudioEntry.audio.pause()
+        waitingAudioEntry.audio.currentTime = 0
+      } catch {
+        // ignore
+      }
+    }
+
     const nodes = toneNodesRef.current
     toneNodesRef.current = null
     if (!nodes) return
@@ -156,7 +174,27 @@ export default function AgentPage() {
   }
 
   const startThinkingTone = async () => {
-    if (toneNodesRef.current) return
+    if (waitingAudioRef.current || toneNodesRef.current) return
+
+    try {
+      const waitingAudio = new Audio(WAITING_SOUND_URL)
+      waitingAudio.preload = 'auto'
+      waitingAudio.volume = WAITING_SOUND_VOLUME
+
+      const loopHandler = () => {
+        if (waitingAudio.currentTime >= WAITING_SOUND_LOOP_END_SEC) {
+          waitingAudio.currentTime = 0
+        }
+      }
+      waitingAudio.addEventListener('timeupdate', loopHandler)
+
+      await waitingAudio.play()
+      waitingAudioRef.current = { audio: waitingAudio, loopHandler }
+      return
+    } catch {
+      // Fall back to generated tone when file is missing or blocked.
+    }
+
     const ctx = await ensureToneContext()
     if (!ctx) return
 
@@ -324,6 +362,13 @@ export default function AgentPage() {
 
       if (result.audio_base64) {
         await playAssistantAudio(result.audio_mime_type, result.audio_base64, { completed: Boolean(result.completed) })
+      } else if (result.completed && result.assistant_response) {
+        try {
+          const completionSpeech = await speakInterviewText(id, result.assistant_response)
+          await playAssistantAudio(completionSpeech.audio_mime_type, completionSpeech.audio_base64, { completed: true })
+        } catch {
+          setStatus('connected')
+        }
       } else {
         setStatus('connected')
       }
@@ -624,7 +669,8 @@ export default function AgentPage() {
   }, [interviewState])
 
   const orbState = useMemo(() => {
-    if (status === 'connecting' || status === 'processing') return 'connecting'
+    if (status === 'processing') return 'thinking'
+    if (status === 'connecting') return 'connecting'
     if (mode === 'speaking') return 'speaking'
     if (micOn || status === 'recording') return 'listening'
     return 'idle'
@@ -632,6 +678,7 @@ export default function AgentPage() {
 
   const orbScale = useMemo(() => {
     if (orbState === 'speaking') return '1.08'
+    if (orbState === 'thinking') return '1.04'
     if (orbState === 'listening') return '1.04'
     if (orbState === 'connecting') return '1.02'
     return '1'
@@ -646,23 +693,22 @@ export default function AgentPage() {
     return t('agent_orb_ready')
   }, [interviewState, mode, status, t])
 
-  const stateLabel = useMemo(() => {
-    if (status === 'recording') return t('agent_state_recording')
-    if (status === 'processing') return t('agent_state_thinking')
-    if (mode === 'speaking') return t('agent_state_speaking')
-    if (status === 'connecting') return t('agent_state_connecting')
-    if (status === 'error') return t('agent_state_error')
-    return t('agent_state_ready')
-  }, [mode, status, t])
+  const interviewCompleted = Boolean(interviewState?.completed)
 
-  const stateClass = useMemo(() => {
-    if (status === 'recording') return 'recording'
-    if (status === 'processing') return 'processing'
-    if (mode === 'speaking') return 'speaking'
-    if (status === 'connecting') return 'connecting'
-    if (status === 'error') return 'error'
-    return 'connected'
-  }, [mode, status])
+  const completedPreviewUrl = useMemo(() => {
+    if (interviewState?.pdf_preview_url) {
+      return toApiAbsoluteUrl(interviewState.pdf_preview_url)
+    }
+    if (livePreviewUrl) {
+      return livePreviewUrl
+    }
+    return ''
+  }, [interviewState?.pdf_preview_url, livePreviewUrl])
+
+  const closeCompletedView = () => {
+    endInterview()
+    navigate('/join')
+  }
 
   if (loading) {
     return (
@@ -690,20 +736,11 @@ export default function AgentPage() {
   if (stage === 'welcome') {
     return (
       <main className="agentShell gateShell gateShellWelcome">
+        <div className="agentWelcomeHeaderWrap">
+          <PortalHeader />
+        </div>
         <section className="gateCard gateCardOpen">
-          <div className="gateTopRow">
-            <div className="gateBrandRow">
-              <Link className="agentGateBrand wordmark" to="/" aria-label="Go to landing page">
-                <span className="wordmarkText">auraforming</span>
-                <span className="wordmarkOrb" aria-hidden="true"></span>
-                <span className="wordmarkText">ai</span>
-              </Link>
-              <Link className="backLandingLink" to="/">
-                {t('agent_back_landing')}
-              </Link>
-            </div>
-          </div>
-          <div className="gateHero">
+          <div className="gateHero gateHeroPanel">
             <div className="gateTitleRow">
               <h1 className="gateFormTitle">{agent.agent_name?.trim() || t('agent_untitled_form')}</h1>
               <span className="gateFormToken" aria-label={`Form ID ${agent.agent_id}`}>
@@ -711,27 +748,6 @@ export default function AgentPage() {
               </span>
             </div>
             <p className="heroText gateHeroText">{t('agent_gate_text')}</p>
-            <div className="interviewLanguageControl">
-              <label className="interviewLanguageLabel" htmlFor="interview-language-select">
-                {t('agent_interview_language')}
-              </label>
-              <select
-                id="interview-language-select"
-                className="interviewLanguageSelect"
-                value={interviewLanguage}
-                onChange={(event) => {
-                  const nextLanguage = normalizeLanguageCode(event.target.value)
-                  setInterviewLanguage(nextLanguage)
-                }}
-                disabled={status === 'connecting'}
-              >
-                {SUPPORTED_LANGUAGES.map((language) => (
-                  <option key={language.code} value={language.code}>
-                    {language.label}
-                  </option>
-                ))}
-              </select>
-            </div>
             <button type="button" className="startPulseButton" onClick={startInterview} disabled={status === 'connecting'}>
               {status === 'connecting' ? t('agent_requesting_mic') : t('agent_start_interview')}
             </button>
@@ -744,40 +760,78 @@ export default function AgentPage() {
 
   return (
     <main className={`agentShell activeShell ${livePreviewEnabled ? 'activeShellSplit' : ''}`}>
-      <header className="agentSessionBar">
-        <div className="agentSessionMeta">
-          <p className="orbEyebrow">{t('agent_form_assistant')}</p>
-          <p className="agentSessionTitle">{agent.agent_name?.trim() || t('agent_untitled_form')}</p>
-          <p className="agentSessionId">{formatAgentToken(agent.agent_id)}</p>
-        </div>
-        <div className="agentModeToggles">
-          <label className="miniToggle">
-            <input
-              type="checkbox"
-              checked={chatModeEnabled}
-              onChange={(event) => setChatModeEnabled(event.target.checked)}
-              disabled={status === 'connecting'}
-            />
-            <span className="miniToggleTrack" aria-hidden="true"></span>
-            <span className="miniToggleLabel">{t('agent_toggle_chat')}</span>
-          </label>
-          <label className="miniToggle">
-            <input
-              type="checkbox"
-              checked={livePreviewEnabled}
-              onChange={(event) => setLivePreviewEnabled(event.target.checked)}
-              disabled={status === 'connecting'}
-            />
-            <span className="miniToggleTrack" aria-hidden="true"></span>
-            <span className="miniToggleLabel">{t('agent_toggle_live_pdf')}</span>
-          </label>
-        </div>
-      </header>
+      {!interviewCompleted ? (
+        <header className="agentSessionBar">
+          <div className="agentSessionMeta">
+            <p className="orbEyebrow">{t('agent_form_assistant')}</p>
+            <p className="agentSessionTitle">{agent.agent_name?.trim() || t('agent_untitled_form')}</p>
+            <p className="agentSessionId">{formatAgentToken(agent.agent_id)}</p>
+          </div>
+          <div className="agentModeToggles prominentToggles">
+            <label className="miniToggle">
+              <input
+                type="checkbox"
+                checked={chatModeEnabled}
+                onChange={(event) => setChatModeEnabled(event.target.checked)}
+                disabled={status === 'connecting'}
+              />
+              <span className="miniToggleTrack" aria-hidden="true"></span>
+              <span className="miniToggleLabel">{t('agent_toggle_chat')}</span>
+            </label>
+            <label className="miniToggle">
+              <input
+                type="checkbox"
+                checked={livePreviewEnabled}
+                onChange={(event) => setLivePreviewEnabled(event.target.checked)}
+                disabled={status === 'connecting'}
+              />
+              <span className="miniToggleTrack" aria-hidden="true"></span>
+              <span className="miniToggleLabel">{t('agent_toggle_live_pdf')}</span>
+            </label>
+            <button type="button" className="endSessionTopButton btnDanger" onClick={() => setShowEndConfirm(true)}>
+              <svg className="endSessionTopIcon" viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M6.7 6.7a1 1 0 0 1 1.4 0L12 10.6l3.9-3.9a1 1 0 1 1 1.4 1.4L13.4 12l3.9 3.9a1 1 0 0 1-1.4 1.4L12 13.4l-3.9 3.9a1 1 0 0 1-1.4-1.4l3.9-3.9-3.9-3.9a1 1 0 0 1 0-1.4Z" />
+              </svg>
+              {t('agent_end_session')}
+            </button>
+          </div>
+        </header>
+      ) : null}
 
-      <section className="activeLayoutGrid">
+      {interviewCompleted ? (
+        <section className="completionOnlyLayout">
+          <div className="completionOnlyPanel">
+            <section className="livePreviewCard completionPreviewCard">
+              <div className="livePreviewHeader">
+                <p className="paneLabel">{t('agent_live_pdf_preview')}</p>
+                <span className="livePreviewState">{t('agent_live_pdf_readonly')}</span>
+              </div>
+              {completedPreviewUrl ? (
+                <iframe
+                  title={t('agent_live_pdf_preview')}
+                  src={`${completedPreviewUrl}#toolbar=1&navpanes=0`}
+                  className="talkingPdfFrame completionPdfFrame"
+                />
+              ) : (
+                <p className="hint">{t('agent_live_pdf_preparing')}</p>
+              )}
+            </section>
+            <div className="completionOnlyActions">
+              {interviewState?.download_url ? (
+                <a className="btnPrimary btnLink" href={toApiAbsoluteUrl(interviewState.download_url)} target="_blank" rel="noreferrer">
+                  Download PDF
+                </a>
+              ) : null}
+              <button type="button" className="btnGhost" onClick={closeCompletedView}>
+                Close
+              </button>
+            </div>
+          </div>
+        </section>
+      ) : (
+        <section className="activeLayoutGrid">
         <section className="voicePanel">
-          <section className="orbStage">
-            <p className={`statusPill ${stateClass}`}>{stateLabel}</p>
+          <section className={`orbStage ${chatModeEnabled ? 'withChat' : ''}`}>
             <div className={`orb ${orbState}`} style={{ '--orb-scale': orbScale }}>
               <div className="orbCore"></div>
             </div>
@@ -799,10 +853,6 @@ export default function AgentPage() {
               ) : (
                 <p className="hint">{t('agent_subtitle_hint')}</p>
               )}
-              <div className="waitingSoundPlaceholder" aria-label="Waiting sound placeholder">
-                <p className="paneLabel">{t('agent_waiting_sound')}</p>
-                <p className="hint">{t('agent_waiting_placeholder')}</p>
-              </div>
             </section>
           ) : null}
 
@@ -819,9 +869,6 @@ export default function AgentPage() {
                     {t('agent_preview_completed')}
                   </a>
                 ) : null}
-                <button type="button" className="endSessionTextButton" onClick={() => setShowEndConfirm(true)}>
-                  {t('agent_end_session')}
-                </button>
               </div>
             ) : (
               <div className="micStack">
@@ -848,9 +895,6 @@ export default function AgentPage() {
                   </svg>
                 </button>
                 <p className="micHint">{t('agent_hold_talk')}</p>
-                <button type="button" className="endSessionTextButton" onClick={() => setShowEndConfirm(true)}>
-                  {t('agent_end_session')}
-                </button>
               </div>
             )}
 
@@ -877,7 +921,8 @@ export default function AgentPage() {
             </section>
           </aside>
         ) : null}
-      </section>
+        </section>
+      )}
 
       {showEndConfirm ? (
         <div className="confirmOverlay" role="dialog" aria-modal="true" aria-label={t('agent_confirm_end_title')}>

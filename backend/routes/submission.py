@@ -6,9 +6,147 @@ import fitz
 from flask import Blueprint, jsonify, request
 from storage import get_agent, save_completed_session, COMPLETED_DIR
 import re
+from urllib.parse import unquote
 
 submission_bp = Blueprint("submission", __name__)
 logger = logging.getLogger(__name__)
+
+
+def _decode_pdf_token(value: str) -> str:
+    if not value:
+        return ""
+    text = unquote(str(value))
+    text = re.sub(r"#([0-9A-Fa-f]{2})", lambda m: bytes.fromhex(m.group(1)).decode("latin1"), text)
+    return " ".join(text.split()).strip()
+
+
+def _normalize_for_match(text: str) -> str:
+    return re.sub(r"[^\w]+", " ", str(text or "").lower(), flags=re.UNICODE).strip()
+
+
+def _extract_widget_options(widget) -> list[str]:
+    options: list[str] = []
+    seen = set()
+
+    raw_choices = getattr(widget, "choice_values", None)
+    if callable(raw_choices):
+        raw_choices = raw_choices()
+    raw_choices = raw_choices or []
+    for choice in raw_choices:
+        item = _decode_pdf_token(str(choice))
+        if item and item.lower() != "off" and item not in seen:
+            seen.add(item)
+            options.append(item)
+
+    button_states = getattr(widget, "button_states", None)
+    if callable(button_states):
+        button_states = button_states()
+    button_states = button_states or {}
+    if not isinstance(button_states, dict):
+        button_states = {}
+    for state_values in button_states.values():
+        for value in state_values or []:
+            item = _decode_pdf_token(str(value))
+            if item and item.lower() != "off" and item not in seen:
+                seen.add(item)
+                options.append(item)
+
+    on_state = getattr(widget, "on_state", "")
+    if callable(on_state):
+        on_state = on_state()
+    on_state = _decode_pdf_token(str(on_state or ""))
+    if on_state and on_state.lower() != "off" and on_state not in seen:
+        options.append(on_state)
+
+    return options
+
+
+def _widget_on_state(widget) -> str:
+    on_state = getattr(widget, "on_state", "")
+    if callable(on_state):
+        on_state = on_state()
+    return str(on_state or "").strip()
+
+
+def _map_value_to_allowed_option(value: str, options: list[str]) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    if raw in options:
+        return raw
+    normalized_raw = _normalize_for_match(raw)
+    for option in options:
+        normalized_option = _normalize_for_match(option)
+        if normalized_raw == normalized_option:
+            return option
+    for option in options:
+        normalized_option = _normalize_for_match(option)
+        if normalized_raw and normalized_raw in normalized_option:
+            return option
+        if normalized_option and normalized_option in normalized_raw:
+            return option
+    return ""
+
+
+def _is_checkbox_yes(value: str) -> bool:
+    normalized = _normalize_for_match(value)
+    yes_tokens = {
+        "yes",
+        "y",
+        "true",
+        "checked",
+        "check",
+        "on",
+        "1",
+        "selected",
+        "x",
+        "mark yes",
+        "affirmative",
+        "consent",
+        "si",
+        "sí",
+        "oui",
+        "ja",
+        "sim",
+        "hai",
+        "はい",
+        "예",
+        "да",
+        "shi",
+        "是",
+        "haan",
+        "हाँ",
+    }
+    return normalized in yes_tokens
+
+
+def _assign_widget_value(widget, value: str) -> None:
+    field_type = str(getattr(widget, "field_type_string", "") or "")
+    text_value = str(value or "").strip()
+
+    if field_type == "CheckBox":
+        on_state = _widget_on_state(widget) or "Yes"
+        normalized_text = _normalize_for_match(text_value)
+        normalized_on_state = _normalize_for_match(on_state)
+        mapped_option = _map_value_to_allowed_option(text_value, _extract_widget_options(widget))
+        if (
+            _is_checkbox_yes(text_value)
+            or (normalized_on_state and normalized_text == normalized_on_state)
+            or (_normalize_for_match(mapped_option) not in {"", "off"})
+        ):
+            widget.field_value = on_state
+        else:
+            widget.field_value = "Off"
+    elif field_type == "RadioButton":
+        mapped = _map_value_to_allowed_option(text_value, _extract_widget_options(widget))
+        widget.field_value = mapped or text_value
+    elif field_type == "ComboBox":
+        mapped = _map_value_to_allowed_option(text_value, _extract_widget_options(widget))
+        widget.field_value = mapped or text_value
+    else:
+        widget.field_value = text_value
+
+    widget.update()
 
 
 def convert_to_readable(pdf_field: str, doc=None) -> str:
@@ -61,42 +199,28 @@ def fill_pdf_with_json(pdf_path: str, answers: dict[str, str]) -> bytes:
     AC3: Flatten the final PDF and return bytes.
     """
     try:
-        print(f"DEBUG: Answers received: {json.dumps(answers, indent=2)}")
-        
-        # Open the PDF
-        doc = fitz.open(pdf_path)
-        filled_count = 0
-        
-        # Iterate through all pages and widgets
-        for page in doc:
-            widgets = page.widgets() or []
-            for widget in widgets:
-                field_name = widget.field_name
-                if field_name in answers:
-                    value = answers[field_name]
-                    widget.field_value = value
-                    widget.update()
-                    filled_count += 1
-        
-        print(f"DEBUG: Filled {filled_count} fields")
-        
-        # Flatten the PDF (remove editability)
-        for page in doc:
-            page.clean_contents()
-        
-        # Write to bytes and close
-        pdf_bytes = doc.write()
-        doc.close()
-        print("\nDEBUG: Verifying filled PDF...")
-        temp_doc = fitz.open(stream=pdf_bytes, filetype="pdf")
-        for page in temp_doc:
-            widgets = page.widgets() or []
-            for widget in widgets:
-                print(f"  {widget.field_name} = {widget.field_value}")
-        temp_doc.close()
-        
-        return pdf_bytes
-        
+        with fitz.open(pdf_path) as doc:
+            processed_radio_fields: set[str] = set()
+            for page in doc:
+                widgets = page.widgets() or []
+                for widget in widgets:
+                    field_name = str(getattr(widget, "field_name", "") or "").strip()
+                    if not field_name or field_name not in answers:
+                        continue
+
+                    field_type = str(getattr(widget, "field_type_string", "") or "")
+                    if field_type == "RadioButton":
+                        if field_name in processed_radio_fields:
+                            continue
+                        processed_radio_fields.add(field_name)
+
+                    _assign_widget_value(widget, str(answers[field_name]))
+
+            try:
+                doc.need_appearances(True)
+            except Exception:
+                pass
+            return doc.write()
     except Exception as e:
         logger.exception("Failed to fill PDF: %s", e)
         raise

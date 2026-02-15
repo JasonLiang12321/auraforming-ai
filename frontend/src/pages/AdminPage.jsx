@@ -12,8 +12,7 @@ export default function AdminPage() {
       <PortalHeader />
 
       <section className="hero">
-        <p className="eyebrow">{t('business_portal')}</p>
-        <h1>{t('admin_hero_title')}</h1>
+        <h1>Create Agent</h1>
         <p className="heroText">{t('admin_hero_text')}</p>
         <div className="heroActions">
           {lastAgent?.share_url ? (

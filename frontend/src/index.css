@@ -281,6 +281,17 @@ select {
   letter-spacing: -0.02em;
 }
 
+.heroTitleRow {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.heroTitleRow h1 {
+  margin: 0.4rem 0 0.55rem;
+}
+
 .heroText {
   margin: 0;
   color: var(--text-soft);
@@ -1610,9 +1621,9 @@ button:disabled {
   border-radius: 0.85rem;
   padding: 0.72rem;
   background: rgba(255, 252, 246, 0.9);
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
   gap: 0.75rem;
   cursor: pointer;
   transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
@@ -1635,6 +1646,7 @@ button:disabled {
 }
 
 .agentTileMain {
+  flex: 1;
   min-width: 0;
   display: grid;
   gap: 0.32rem;
@@ -1682,19 +1694,29 @@ button:disabled {
 
 .agentTileActions {
   display: flex;
-  flex-direction: column;
-  gap: 0.36rem;
   align-items: center;
-  justify-content: center;
-  border-left: 1px solid var(--line-soft);
-  padding-left: 0.62rem;
-  margin-left: 0.18rem;
+  justify-content: flex-end;
+  justify-self: end;
+  flex-shrink: 0;
+  border-left: none;
+  padding-left: 0;
+  margin-left: 0;
+}
+
+.agentTileActionRow {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-end;
+  white-space: nowrap;
+  gap: 0.5rem;
 }
 
 .btnDanger {
-  color: var(--danger);
-  background: var(--danger-soft);
-  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
+  color: #fff5f8;
+  background: linear-gradient(135deg, #fb7185, #e11d48);
+  border-color: color-mix(in srgb, var(--danger) 64%, transparent);
+  box-shadow: 0 14px 30px -20px rgba(225, 29, 72, 0.65);
 }
 
 .iconBtn {
@@ -1731,14 +1753,45 @@ button:disabled {
 
 .iconBtn.danger {
   color: var(--text-soft);
-  border-color: var(--line-soft);
+  border-color: var(--control-border);
   background: rgba(255, 255, 255, 0.92);
 }
 
 .iconBtn.danger:hover {
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 40%, transparent);
-  background: var(--danger-soft);
+  color: #fff5f8;
+  border-color: color-mix(in srgb, var(--danger) 70%, transparent);
+  background: linear-gradient(135deg, #fb7185, #e11d48);
+}
+
+.startInterviewBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.28rem;
+  padding: 0.42rem 0.95rem;
+  border-radius: 999px;
+  border: 1px solid var(--control-border);
+  background: linear-gradient(135deg, #efe0c6, #e2ca9f);
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  text-decoration: none;
+  white-space: nowrap;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease, background 160ms ease;
+}
+
+.startInterviewBtn:hover {
+  border-color: var(--focus-ring);
+  background: linear-gradient(135deg, #f3e6ce, #e8d3ab);
+  box-shadow: 0 10px 22px -16px rgba(108, 82, 47, 0.52);
+  transform: translateY(-1px);
+}
+
+.startInterviewBtn:focus-visible {
+  outline: 2px solid var(--focus-ring);
+  outline-offset: 2px;
 }
 
 .refreshBtn {
@@ -2140,8 +2193,8 @@ button:disabled {
 }
 
 .gateCardOpen {
-  width: 100%;
-  min-height: calc(100vh - 2.4rem);
+  width: min(1160px, calc(100% - 2rem));
+  min-height: 0;
   max-width: none;
   border: none;
   border-radius: 0;
@@ -2150,10 +2203,22 @@ button:disabled {
   padding: 0;
   display: flex;
   flex-direction: column;
+  align-self: center;
+  margin-top: clamp(-3.2rem, -5.5vh, -1.2rem);
 }
 
 .gateShellWelcome {
-  padding: 1.2rem;
+  display: grid;
+  grid-template-rows: auto 1fr;
+  align-items: stretch;
+  justify-items: center;
+  row-gap: 0.9rem;
+  padding: 0.75rem 1.2rem 1.2rem;
+}
+
+.agentWelcomeHeaderWrap {
+  width: min(1160px, calc(100% - 2rem));
+  margin: 0 auto;
 }
 
 .gateTopRow {
@@ -2205,6 +2270,16 @@ button:disabled {
   text-align: center;
   gap: 0.35rem;
   padding: clamp(2rem, 8vh, 5.25rem) 0 clamp(2rem, 8vh, 4.6rem);
+}
+
+.gateHeroPanel {
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 1.2rem;
+  background: linear-gradient(145deg, rgba(255, 250, 242, 0.96), rgba(248, 240, 228, 0.96));
+  box-shadow: 0 30px 62px -48px rgba(108, 82, 47, 0.45);
+  gap: 0.8rem;
+  padding: clamp(2rem, 6.5vh, 4.2rem) clamp(1rem, 2.1vw, 1.9rem);
 }
 
 .gateTitleRow {
@@ -2273,8 +2348,8 @@ button:disabled {
 }
 
 .startPulseButton {
-  margin: 1.1rem 0 0 auto;
-  justify-self: end;
+  margin: 1.1rem auto 0;
+  justify-self: center;
   min-width: 0;
   width: min(100%, clamp(260px, 34vw, 360px));
   min-height: 3.5rem;
@@ -2431,16 +2506,16 @@ button:disabled {
     linear-gradient(180deg, #f8f2e8 0%, #f3eadf 100%);
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.4rem;
+  height: 100dvh;
+  overflow: hidden;
 }
 
 .agentSessionBar {
-  width: min(1240px, 100%);
+  width: min(1160px, 100%);
   margin: 0 auto;
-  position: sticky;
-  top: 0.7rem;
-  z-index: 30;
-  padding: 0.5rem 1rem 0;
+  z-index: 10;
+  padding: 0.6rem 1rem 0;
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
@@ -2452,6 +2527,8 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 0.2rem;
+  min-width: 0;
+  flex: 1 1 280px;
 }
 
 .agentSessionTitle {
@@ -2459,6 +2536,7 @@ button:disabled {
   font-size: clamp(1rem, 2.2vw, 1.25rem);
   font-weight: 700;
   color: var(--text);
+  overflow-wrap: anywhere;
 }
 
 .agentSessionId {
@@ -2472,24 +2550,86 @@ button:disabled {
 .agentModeToggles {
   display: flex;
   align-items: center;
-  gap: 0.65rem;
+  gap: 0.7rem;
   flex-wrap: wrap;
+  margin-left: auto;
+  max-width: 100%;
+  justify-content: flex-end;
+}
+
+.agentModeToggles.prominentToggles .miniToggle {
+  padding: 0.56rem 0.88rem;
+  font-size: 0.92rem;
+  border-color: rgba(156, 120, 66, 0.58);
+  box-shadow: 0 14px 28px -18px rgba(108, 82, 47, 0.62);
+  background: linear-gradient(135deg, rgba(255, 251, 244, 0.99), rgba(248, 236, 214, 0.98));
+}
+
+.agentModeToggles.prominentToggles .miniToggleTrack {
+  width: 2.35rem;
+  height: 1.34rem;
+}
+
+.agentModeToggles.prominentToggles .miniToggleTrack::after {
+  width: 0.94rem;
+  height: 0.94rem;
+}
+
+.agentModeToggles.prominentToggles .miniToggle input:checked + .miniToggleTrack::after {
+  transform: translate(1.01rem, -50%);
+}
+
+.agentModeToggles.prominentToggles .miniToggleLabel {
+  font-weight: 800;
+}
+
+.endSessionTopButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  min-height: 2.45rem;
+  padding: 0.5rem 0.86rem;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.endSessionTopIcon {
+  width: 0.98rem;
+  height: 0.98rem;
+  flex: 0 0 auto;
+  fill: currentColor;
 }
 
 .miniToggle {
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 0.42rem;
-  padding: 0.28rem 0.56rem;
+  gap: 0.55rem;
+  padding: 0.44rem 0.72rem;
   border-radius: 999px;
-  border: 1px solid var(--line-soft);
-  background: rgba(255, 252, 246, 0.94);
-  color: var(--text-soft);
-  font-size: 0.8rem;
-  font-weight: 600;
+  border: 1px solid rgba(176, 138, 77, 0.44);
+  background: linear-gradient(135deg, rgba(255, 252, 246, 0.98), rgba(250, 241, 226, 0.98));
+  box-shadow: 0 10px 20px -16px rgba(108, 82, 47, 0.5);
+  color: var(--text);
+  font-size: 0.84rem;
+  font-weight: 700;
   cursor: pointer;
   user-select: none;
+  max-width: 100%;
+  transition: border-color 180ms ease, box-shadow 180ms ease, transform 150ms ease;
+}
+
+.miniToggle:hover {
+  border-color: rgba(156, 120, 66, 0.56);
+  box-shadow: 0 14px 28px -18px rgba(108, 82, 47, 0.56);
+}
+
+.miniToggle:focus-within {
+  border-color: rgba(122, 90, 46, 0.78);
+  box-shadow: 0 0 0 2px rgba(122, 90, 46, 0.18), 0 14px 28px -18px rgba(108, 82, 47, 0.5);
 }
 
 .miniToggle input {
@@ -2499,36 +2639,38 @@ button:disabled {
 }
 
 .miniToggleTrack {
-  width: 1.75rem;
-  height: 1rem;
+  width: 2.1rem;
+  height: 1.2rem;
   border-radius: 999px;
-  border: 1px solid rgba(176, 138, 77, 0.6);
-  background: rgba(255, 246, 232, 0.9);
+  border: 1px solid rgba(176, 138, 77, 0.72);
+  background: rgba(255, 240, 218, 0.96);
   position: relative;
-  transition: background 180ms ease, border-color 180ms ease;
+  flex: 0 0 auto;
+  transition: background 180ms ease, border-color 180ms ease, box-shadow 180ms ease;
 }
 
 .miniToggleTrack::after {
   content: '';
   position: absolute;
   top: 50%;
-  left: 0.1rem;
-  width: 0.72rem;
-  height: 0.72rem;
+  left: 0.14rem;
+  width: 0.82rem;
+  height: 0.82rem;
   border-radius: 50%;
-  background: #6d5336;
+  background: #6b4f2f;
   transform: translateY(-50%);
   transition: transform 160ms ease, background 160ms ease;
 }
 
 .miniToggle input:checked + .miniToggleTrack {
-  border-color: rgba(74, 222, 128, 0.62);
-  background: rgba(74, 222, 128, 0.2);
+  border-color: rgba(74, 222, 128, 0.8);
+  background: rgba(74, 222, 128, 0.3);
+  box-shadow: inset 0 0 0 1px rgba(74, 222, 128, 0.18);
 }
 
 .miniToggle input:checked + .miniToggleTrack::after {
-  transform: translate(0.74rem, -50%);
-  background: #2f7a58;
+  transform: translate(0.9rem, -50%);
+  background: #236443;
 }
 
 .miniToggle input:disabled + .miniToggleTrack {
@@ -2536,31 +2678,46 @@ button:disabled {
 }
 
 .miniToggleLabel {
-  line-height: 1;
+  line-height: 1.1;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  letter-spacing: 0.01em;
 }
 
 .activeLayoutGrid {
-  width: min(1240px, 100%);
+  width: min(1160px, 100%);
   margin: 0 auto;
-  padding: 0 1rem 1.1rem;
+  padding: 0 1rem 0.7rem;
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 0.9rem;
+  grid-template-rows: minmax(0, 1fr);
+  gap: 0.75rem;
+  align-items: stretch;
+  flex: 1;
+  min-height: 0;
 }
 
 .activeShellSplit .activeLayoutGrid {
-  grid-template-columns: minmax(0, 1fr) minmax(360px, 44%);
+  grid-template-columns: minmax(0, 1fr) minmax(380px, 48%);
+  column-gap: 2rem;
+  min-height: 0;
 }
 
 .voicePanel {
   min-height: 0;
+  min-width: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.8rem;
+  gap: 0.55rem;
+  justify-content: space-between;
+  overflow: hidden;
 }
 
 .livePreviewSide {
   min-height: 0;
+  min-width: 0;
+  height: 100%;
+  display: flex;
 }
 
 .voiceTopBar {
@@ -2585,6 +2742,7 @@ button:disabled {
   font-size: 0.7rem;
   font-weight: 700;
   border: 1px solid var(--line-soft);
+  margin: 0 0 1.05rem;
 }
 
 .statusPill.connected {
@@ -2624,10 +2782,18 @@ button:disabled {
 }
 
 .orbStage {
-  flex: 1;
+  flex: 0 0 auto;
   display: grid;
-  place-items: center;
-  padding: 0.3rem 0;
+  justify-items: center;
+  align-content: start;
+  grid-template-rows: auto auto auto;
+  row-gap: 1.15rem;
+  padding: 3.4rem 0 0.35rem;
+  min-height: 0;
+}
+
+.orbStage.withChat {
+  padding-top: 3.8rem;
 }
 
 .orbEyebrow {
@@ -2639,14 +2805,32 @@ button:disabled {
 }
 
 .orb {
-  width: clamp(220px, 34vw, 320px);
+  width: clamp(172px, min(30vw, 30vh), 286px);
   aspect-ratio: 1;
   border-radius: 50%;
   position: relative;
   display: grid;
   place-items: center;
+  margin-bottom: 1.85rem;
   transform: scale(var(--orb-scale, 1));
   transition: transform 180ms ease, box-shadow 260ms ease, background 260ms ease;
+}
+
+.orbStage.withChat .orb {
+  width: clamp(138px, min(22vw, 22vh), 212px);
+  margin-bottom: 1.25rem;
+}
+
+.orbStage.withChat .orb::before {
+  inset: -7%;
+}
+
+.orbStage.withChat .orb::after {
+  inset: -10%;
+}
+
+.orbStage.withChat .orbCaption {
+  margin-top: 0.6rem;
 }
 
 .orb::before,
@@ -2654,12 +2838,13 @@ button:disabled {
   content: '';
   position: absolute;
   border-radius: 50%;
-  inset: -10%;
+  inset: -8%;
   border: 1px solid rgba(176, 138, 77, 0.5);
+  pointer-events: none;
 }
 
 .orb::after {
-  inset: -20%;
+  inset: -12%;
   border-color: rgba(156, 120, 66, 0.38);
 }
 
@@ -2672,10 +2857,13 @@ button:disabled {
 }
 
 .orbCaption {
-  margin: 0.9rem 0 0;
+  margin: 0;
   color: var(--text-soft);
   text-align: center;
-  max-width: 46ch;
+  max-width: 40ch;
+  margin-top: 0.95rem;
+  padding-top: 0.25rem;
+  padding-bottom: 0.2rem;
 }
 
 .orb.idle {
@@ -2687,6 +2875,19 @@ button:disabled {
   animation: breathing 1.4s ease-in-out infinite;
 }
 
+.orb.thinking {
+  box-shadow: 0 0 54px -18px rgba(201, 162, 105, 0.92);
+  animation: orbThinkingVibe 220ms linear infinite;
+}
+
+.orb.thinking::before {
+  animation: orbRingPulse 820ms ease-in-out infinite;
+}
+
+.orb.thinking::after {
+  animation: orbRingPulse 820ms ease-in-out infinite reverse;
+}
+
 .orb.listening {
   box-shadow: 0 0 52px -18px rgba(173, 197, 185, 0.8);
   animation: breathing 2s ease-in-out infinite;
@@ -2694,6 +2895,19 @@ button:disabled {
 
 .orb.speaking {
   box-shadow: 0 0 74px -14px rgba(221, 198, 159, 0.9);
+}
+
+.orb.speaking::before {
+  animation: orbRingWave 1.05s cubic-bezier(0.24, 0.78, 0.2, 1) infinite;
+}
+
+.orb.speaking::after {
+  animation: orbRingWave 1.05s cubic-bezier(0.24, 0.78, 0.2, 1) infinite reverse;
+  animation-delay: 160ms;
+}
+
+.orb.speaking .orbCore {
+  animation: orbCoreTalk 860ms ease-in-out infinite;
 }
 
 .orb.success {
@@ -2714,13 +2928,16 @@ button:disabled {
   gap: 0.8rem;
   align-items: center;
   width: min(760px, 100%);
+  min-width: 0;
   margin: 0 auto;
-  padding: 0 0.2rem 0.8rem;
+  margin-top: 0.45rem;
+  padding: 0 0.2rem 0.45rem;
 }
 
 .subtitleCard {
   width: min(760px, 100%);
   margin: 0 auto;
+  margin-top: 0.35rem;
   border: 1px solid var(--line-soft);
   border-radius: 0.92rem;
   background: rgba(255, 252, 246, 0.94);
@@ -2728,6 +2945,9 @@ button:disabled {
   display: flex;
   flex-direction: column;
   gap: 0.42rem;
+  overflow-wrap: anywhere;
+  max-height: 20vh;
+  overflow: auto;
 }
 
 .subtitleLine {
@@ -2750,6 +2970,8 @@ button:disabled {
 
 .livePreviewCard {
   width: 100%;
+  height: 100%;
+  min-height: 0;
   border: 1px solid var(--line);
   border-radius: 1rem;
   background: linear-gradient(145deg, rgba(255, 250, 242, 0.96), rgba(247, 239, 226, 0.95));
@@ -2775,11 +2997,51 @@ button:disabled {
 
 .talkingPdfFrame {
   width: 100%;
-  height: min(66vh, 780px);
-  min-height: 420px;
+  height: 100%;
+  min-height: 0;
+  flex: 1 1 auto;
   border: 1px solid var(--line-soft);
   border-radius: 0.7rem;
   background: #fff;
+}
+
+.completionOnlyLayout {
+  width: min(1160px, 100%);
+  margin: 0 auto;
+  padding: 0 1rem 0.8rem;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  flex: 1;
+  min-height: 0;
+}
+
+.completionOnlyPanel {
+  width: min(780px, 100%);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.completionPreviewCard {
+  height: min(68dvh, 760px);
+  min-height: 320px;
+}
+
+.completionPdfFrame {
+  height: 100%;
+}
+
+.completionOnlyActions {
+  display: flex;
+  flex-direction: column;
+  gap: 0.55rem;
+}
+
+.completionOnlyActions .btnLink,
+.completionOnlyActions button {
+  width: 100%;
 }
 
 .voiceControls {
@@ -2794,7 +3056,7 @@ button:disabled {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 0.66rem;
+  gap: 0.64rem;
 }
 
 .micHoldButton {
@@ -3014,6 +3276,61 @@ button:disabled {
   }
   50% {
     transform: scale(1.03);
+  }
+}
+
+@keyframes orbThinkingVibe {
+  0% {
+    transform: translate(0, 0) scale(var(--orb-scale, 1));
+  }
+  25% {
+    transform: translate(0.8px, -0.9px) scale(var(--orb-scale, 1));
+  }
+  50% {
+    transform: translate(-0.9px, 0.7px) scale(var(--orb-scale, 1));
+  }
+  75% {
+    transform: translate(0.7px, 0.9px) scale(var(--orb-scale, 1));
+  }
+  100% {
+    transform: translate(0, 0) scale(var(--orb-scale, 1));
+  }
+}
+
+@keyframes orbRingPulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.045);
+  }
+}
+
+@keyframes orbRingWave {
+  0% {
+    opacity: 0.38;
+    transform: scale(0.96);
+  }
+  40% {
+    opacity: 0.92;
+    transform: scale(1.08);
+  }
+  100% {
+    opacity: 0.44;
+    transform: scale(1.18);
+  }
+}
+
+@keyframes orbCoreTalk {
+  0%,
+  100% {
+    transform: scale(0.98);
+  }
+  50% {
+    transform: scale(1.07);
   }
 }
 
@@ -3241,11 +3558,27 @@ button:disabled {
   }
 
   .gateShellWelcome {
-    padding: 1rem;
+    row-gap: 0.7rem;
+    padding: 0.6rem 1rem 1rem;
+  }
+
+  .agentWelcomeHeaderWrap {
+    width: min(1160px, calc(100% - 1rem));
+  }
+
+  .gateCardOpen {
+    width: min(1160px, calc(100% - 1rem));
+    padding-top: 0;
+    margin-top: clamp(-1rem, -2.2vh, -0.35rem);
   }
 
   .gateHero {
     padding: 1.6rem 0 2.2rem;
+  }
+
+  .gateHeroPanel {
+    gap: 0.62rem;
+    padding: 1.45rem 0.95rem 1.9rem;
   }
 
   .gateBrandRow {
@@ -3264,11 +3597,11 @@ button:disabled {
   }
 
   .agentSessionBar {
-    padding: 0.2rem 0.2rem 0;
+    padding: 0.2rem 0 0;
   }
 
   .activeLayoutGrid {
-    padding: 0 0.2rem 0.8rem;
+    padding: 0 0 0.8rem;
   }
 
   .activeShellSplit .activeLayoutGrid {
@@ -3289,8 +3622,8 @@ button:disabled {
   }
 
   .talkingPdfFrame {
-    height: min(52vh, 560px);
-    min-height: 280px;
+    height: 100%;
+    min-height: 0;
   }
 
   .fillHeader {
@@ -3310,6 +3643,12 @@ button:disabled {
   .livePdfFrame {
     height: min(72vh, 560px);
     min-height: 360px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .activeShellSplit .activeLayoutGrid {
+    grid-template-columns: 1fr;
   }
 }
 
@@ -3477,6 +3816,58 @@ button:disabled {
     min-width: min(16rem, 100%);
   }
 
+  .agentSessionBar {
+    gap: 0.55rem;
+  }
+
+  .agentModeToggles {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .miniToggle {
+    width: 100%;
+    justify-content: space-between;
+    padding: 0.5rem 0.76rem;
+  }
+
+  .orb {
+    width: clamp(160px, min(60vw, 26vh), 228px);
+    margin-bottom: 1.9rem;
+  }
+
+  .orbStage {
+    padding-top: 2.35rem;
+  }
+
+  .orbStage.withChat {
+    padding-top: 2.8rem;
+  }
+
+  .orbStage.withChat .orb {
+    width: clamp(132px, min(50vw, 22vh), 186px);
+    margin-bottom: 1.15rem;
+  }
+
+  .orbCaption {
+    max-width: 34ch;
+    margin-top: 0.95rem;
+    padding-top: 0;
+  }
+
+  .subtitleLine {
+    font-size: 0.88rem;
+  }
+
+  .micHoldButton {
+    width: 4.6rem;
+    height: 4.6rem;
+  }
+
+  .talkingPdfFrame {
+    height: 100%;
+    min-height: 0;
+  }
   .landingShell .landingIntro {
     display: none;
   }
@@ -3495,6 +3886,50 @@ button:disabled {
 
   .landingShell {
     --intro-home-scale: 2.2;
+  }
+}
+
+@media (max-height: 760px) {
+  .agentSessionBar {
+    gap: 0.55rem;
+  }
+
+  .voicePanel {
+    gap: 0.55rem;
+  }
+
+  .orb {
+    width: clamp(150px, 24vh, 250px);
+    margin-bottom: 1.6rem;
+  }
+
+  .orbStage {
+    padding-top: 2rem;
+  }
+
+  .orbStage.withChat {
+    padding-top: 2.35rem;
+  }
+
+  .orbStage.withChat .orb {
+    width: clamp(124px, 19vh, 176px);
+    margin-bottom: 1rem;
+  }
+
+  .orbCaption {
+    max-width: 34ch;
+    margin-top: 0.85rem;
+    padding-top: 0;
+  }
+
+  .voiceFooter {
+    gap: 0.55rem;
+    padding-bottom: 0.45rem;
+  }
+
+  .talkingPdfFrame {
+    height: 100%;
+    min-height: 0;
   }
 }
 

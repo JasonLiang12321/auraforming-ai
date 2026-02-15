@@ -43,7 +43,7 @@ class InterviewSession:
 
 SESSIONS: dict[str, InterviewSession] = {}
 ELEVENLABS_API_BASE = "https://api.elevenlabs.io/v1"
-ENABLE_LABEL_LOCALIZATION = os.getenv("ENABLE_INTERVIEW_LABEL_LOCALIZATION", "").strip().lower() in {"1", "true", "yes"}
+ENABLE_LABEL_LOCALIZATION = os.getenv("ENABLE_INTERVIEW_LABEL_LOCALIZATION", "1").strip().lower() in {"1", "true", "yes"}
 SUPPORTED_INTERVIEW_LANGUAGES: dict[str, str] = {
     "en-US": "English (US)",
     "en-GB": "English (UK)",
@@ -593,6 +593,10 @@ def _coerce_checkbox_value(value: str) -> str:
         "true",
         "checked",
         "check",
+        "on",
+        "1",
+        "selected",
+        "x",
         "mark yes",
         "affirmative",
         "consent",
@@ -616,6 +620,8 @@ def _coerce_checkbox_value(value: str) -> str:
         "false",
         "unchecked",
         "uncheck",
+        "off",
+        "0",
         "mark no",
         "decline",
         "do not consent",
@@ -703,7 +709,18 @@ def _assign_widget_value(widget, value: str) -> None:
     text_value = str(value or "").strip()
 
     if field_type == "CheckBox":
-        widget.field_value = _widget_on_state(widget) if _checkbox_is_yes(text_value) else "Off"
+        on_state = _widget_on_state(widget) or "Yes"
+        normalized_text = _normalize_for_match(text_value)
+        normalized_on_state = _normalize_for_match(on_state)
+        mapped_option = _map_value_to_allowed_option(text_value, _extract_widget_options(widget))
+        if (
+            _checkbox_is_yes(text_value)
+            or (normalized_on_state and normalized_text == normalized_on_state)
+            or (_normalize_for_match(mapped_option) not in {"", "off"})
+        ):
+            widget.field_value = on_state
+        else:
+            widget.field_value = "Off"
     elif field_type == "RadioButton":
         options = _extract_widget_options(widget)
         mapped = _map_value_to_allowed_option(text_value, options)
@@ -866,7 +883,10 @@ Rules:
   - assistant_response must confirm the captured value for the CURRENT field label.
   - if Next field label is non-empty, assistant_response must also ask that next field in the same response.
   - if next field type is ComboBox/RadioButton and options exist, assistant_response must list those options in the question.
-  - do not output very short fragments; never output just the field name or "X?".
+  - the next question must always be a complete natural sentence, never a fragment.
+  - never output one-word or two-word prompts, and never output just the field name or "X?".
+  - bad examples: "Dropdown2?", "Name?", "Province?".
+  - good example: "Thank you. Next, which province or territory should I enter for this form?"
 - Never ask for multiple fields at once.
 - Never invent field names.
 - assistant_response must be entirely in "{language_label}".
