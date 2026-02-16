@@ -37,12 +37,17 @@ export default function LandingPage() {
   const { t, uiLanguage, setUiLanguage, supportedLanguages } = useI18n()
   const navigate = useNavigate()
   const location = useLocation()
+  const searchParams = new URLSearchParams(location.search)
   const CODE_LENGTH = 8
   const isPhoneViewport = typeof window !== 'undefined' && window.matchMedia('(max-width: 700px)').matches
-  const isJoinRequested = location.pathname === '/join' || new URLSearchParams(location.search).get('join') === '1'
+  const isJoinRequested = location.pathname === '/join' || searchParams.get('join') === '1'
+  const freezeLogoIntro = searchParams.get('freezeLogo') === '1'
   const [stage, setStage] = useState('hero')
   const [isPhone, setIsPhone] = useState(() => isPhoneViewport)
-  const [introPhase, setIntroPhase] = useState(() => (isPhoneViewport || isJoinRequested ? 'ready' : 'intro'))
+  const [introPhase, setIntroPhase] = useState(() => {
+    if (freezeLogoIntro) return 'intro'
+    return isPhoneViewport || isJoinRequested ? 'ready' : 'intro'
+  })
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false)
   const [codeChars, setCodeChars] = useState(Array.from({ length: CODE_LENGTH }, () => ''))
   const [clientError, setClientError] = useState('')
@@ -103,18 +108,20 @@ export default function LandingPage() {
   }, [])
 
   useEffect(() => {
+    if (freezeLogoIntro) return
     if (!isJoinRequested) return
     setIntroPhase('ready')
     setClientError('')
     setCodeChars(Array.from({ length: CODE_LENGTH }, () => ''))
     setClientStatus('idle')
     setStage('client')
-  }, [CODE_LENGTH, isJoinRequested])
+  }, [CODE_LENGTH, freezeLogoIntro, isJoinRequested])
 
   useEffect(() => {
+    if (freezeLogoIntro) return
     if (!isPhone) return
     setIntroPhase('ready')
-  }, [isPhone])
+  }, [freezeLogoIntro, isPhone])
 
   useEffect(() => {
     if (!isPhone) {
@@ -123,7 +130,7 @@ export default function LandingPage() {
   }, [isPhone])
 
   useEffect(() => {
-    if (isPhone || isJoinRequested) return
+    if (freezeLogoIntro || isPhone || isJoinRequested) return
     const dockTimer = window.setTimeout(() => setIntroPhase('dock'), 1300)
     const headerTimer = window.setTimeout(() => setIntroPhase('header'), 2050)
     const readyTimer = window.setTimeout(() => setIntroPhase('ready'), 2850)
@@ -133,7 +140,7 @@ export default function LandingPage() {
       window.clearTimeout(headerTimer)
       window.clearTimeout(readyTimer)
     }
-  }, [isJoinRequested, isPhone])
+  }, [freezeLogoIntro, isJoinRequested, isPhone])
 
   useEffect(() => {
     const updateIntroTarget = () => {

@@ -1,179 +1,112 @@
-# Gemini Integration (Interview Reasoning Layer)
+# Gemini Integration (Current)
 
-This document describes how Gemini is used in the current app for guided voice form filling.
+This doc reflects the **current live implementation** in `backend/routes/interview.py` and `backend/routes/gemini.py`.
 
-## Purpose
+## Role of Gemini
 
-Gemini is the reasoning engine behind the guided interview flow:
+Gemini is the reasoning layer for interview turns. It:
 
-- Decides whether a user answer is adequate for the current field.
-- Returns a short assistant response for the next turn.
-- Handles clarification and interruption (`barge_in`) intents.
+- validates the current answer
+- decides if the answer is adequate
+- returns normalized values for PDF filling
+- generates the assistant’s next spoken response
+- handles interruptions (`barge_in`)
 
-ElevenLabs is used as transport only (STT + TTS). Gemini handles all turn validation/state decisions.
+ElevenLabs is used for STT/TTS transport; Gemini decides interview logic.
 
-## Model
+## Model and Config
 
-- Environment variable: `GEMINI_MODEL`
-- Default: ``
-- API key variable: `GEMINI_API_KEY`
+- Env var: `GEMINI_API_KEY` (required)
+- Env var: `GEMINI_MODEL` (optional)
+- Default model: `gemini-2.0-flash`
 
 Configured in: `backend/routes/gemini.py`
 
-## Backend Endpoints
+## Endpoints that use Gemini
 
-### 1) Start Interview Session
+- `POST /api/agent/<agent_id>/interview/turn`
+  - text turn validation
+- `POST /api/agent/<agent_id>/interview/turn-audio`
+  - STT transcript -> Gemini validation -> TTS response
+- `POST /api/gemini/questions`
+  - helper for generating grouped field questions
+- `POST /api/gemini/ui-translations`
+  - helper for UI translation payloads
 
-- `POST /api/agent/{agent_id}/interview/start`
-- File: `backend/routes/interview.py`
+## Active Prompt Sources (Source of Truth)
 
-What it does:
+- `backend/routes/interview.py::_build_system_prompt(...)`
+- `backend/routes/interview.py::_build_first_prompt(...)`
+- `backend/routes/interview.py::_evaluate_turn_with_gemini(...)`
 
-- Loads agent schema (`widget_names`) for `agent_id`
-- Creates in-memory interview session
-- Returns:
-  - `session_id`
-  - `missing_fields` (ordered list)
-  - `current_field`
-  - `system_prompt` (sequential collection rules)
-  - `first_prompt`
+### 1) System Prompt (`_build_system_prompt`)
 
-### 2) Process Interview Turn
+The prompt enforces:
 
-- `POST /api/agent/{agent_id}/interview/turn`
-- File: `backend/routes/interview.py`
+1. one field at a time, strict order  
+2. use user-facing labels only (never technical keys)  
+3. proper handling for `ComboBox/RadioButton` options  
+4. `CheckBox` as yes/no  
+5. clarify if inadequate  
+6. interruption recovery  
+7. no out-of-scope fields  
+8. assistant responses in selected interview language  
+9. `normalized_value` in English for PDF filling
 
-Request body:
+### 2) First Prompt (`_build_first_prompt`)
+
+Built from language copy templates and field metadata.  
+It introduces the form and asks the first field in the selected language.
+
+### 3) Turn-Evaluation Prompt (`_evaluate_turn_with_gemini`)
+
+Prompt includes:
+
+- form title
+- required assistant language
+- current field label/type/options
+- next field label/type/options
+- remaining fields
+- collected answers
+- user transcript
+- interruption flag
+
+Strict JSON contract requested:
 
 ```json
 {
-  "session_id": "abc123def456",
-  "user_input": "user transcript text",
-  "was_interruption": false
+  "intent": "data|clarification|acknowledgment|barge_in",
+  "is_answer_adequate": true,
+  "normalized_value": "string",
+  "collected_values": ["..."],
+  "assistant_response": "string"
 }
 ```
 
-What it does:
+`collected_values` is used for grouped/multi-select fields.
 
-- Validates current field only (no jumping fields).
-- Calls Gemini with strict JSON schema.
-- If adequate:
-  - stores normalized answer
-  - advances to next field
-- If inadequate:
-  - keeps current field
-  - asks clarification
+## Output Handling Rules
 
-Response includes:
+Backend coercion logic applies after Gemini output:
 
-- `completed`
-- `current_field`
-- `missing_fields`
-- `answers`
-- `intent`
-- `is_answer_adequate`
-- `assistant_response`
+- checkboxes mapped to `Yes/No` semantics
+- radio/dropdown values mapped to allowed options
+- grouped fields can write multiple related keys in one turn
 
-### 3) Process Interview Audio Turn (Primary)
+If Gemini returns an adequate answer, backend advances field state and may append/ensure next question quality.
 
-- `POST /api/agent/{agent_id}/interview/turn-audio`
-- File: `backend/routes/interview.py`
+## Error Mapping
 
-Request body (multipart form-data):
+`run_gemini_json(...)` maps failures to typed errors:
 
-- `session_id` (string)
-- `was_interruption` (boolean-like string)
-- `audio` (recorded audio file from browser)
+- `GEMINI_AUTH` (invalid/expired key)
+- `GEMINI_RATE_LIMIT` (429/resource exhausted)
+- `GEMINI_REQUEST` (other request failures)
 
-What it does:
+These are surfaced in interview endpoints as structured error codes.
 
-- Sends uploaded audio to ElevenLabs STT.
-- Uses transcript as `user_input` for Gemini turn evaluation.
-- Uses Gemini `assistant_response` text for ElevenLabs TTS synthesis.
-- Returns both structured interview result and playable audio payload.
+## Notes
 
-Additional response fields:
-
-- `user_transcript`
-- `audio_mime_type`
-- `audio_base64`
-
-### 4) Synthesize Interview Text
-
-- `POST /api/agent/{agent_id}/interview/speak`
-- File: `backend/routes/interview.py`
-
-Used by frontend to play the opening first prompt before user records first turn.
-
-### 5) Generic Gemini Utility Endpoints
-
-In `backend/routes/gemini.py`:
-
-- `POST /api/gemini`
-- `POST /api/gemini/questions`
-
-These are utility endpoints and are separate from the live interview turn pipeline.
-
-## Prompting + JSON Contract
-
-Gemini calls use:
-
-- `response_mime_type: "application/json"`
-- strict `response_schema`
-
-Interview turn required fields:
-
-- `intent`: `data | clarification | acknowledgment | barge_in`
-- `is_answer_adequate`: boolean
-- `normalized_value`: string
-- `assistant_response`: string
-
-Helper used:
-
-- `run_gemini_json(...)` in `backend/routes/gemini.py`
-
-## Frontend Wiring
-
-Main file: `frontend/src/pages/AgentPage.jsx`
-
-Flow:
-
-1. Start interview session (`/interview/start`).
-2. Play first prompt with `/interview/speak`.
-3. User records audio (push-to-talk) in browser.
-4. Send audio to `/interview/turn-audio`.
-5. Backend returns transcript + Gemini decision + ElevenLabs TTS audio.
-6. Frontend plays returned assistant audio.
-7. Repeat until `completed`.
-
-API helpers:
-
-- `startGuidedInterview(...)`
-- `submitInterviewAudioTurn(...)`
-- `speakInterviewText(...)`
-
-in `frontend/src/services/api.js`.
-
-## Interruption Handling (Barge-in)
-
-- Frontend flags interruption when user speaks while assistant mode is `speaking`:
-  - `was_interruption = true`
-- Backend prompt allows `barge_in` intent and instructs Gemini to acknowledge and pivot back to current field.
-
-## Notes / Limits
-
-- Interview sessions are currently in-memory (`SESSIONS` dict in `backend/routes/interview.py`).
-- Restarting backend clears active interview sessions.
-- Final PDF completion persistence is not part of this interview logic doc.
-
-## Required Env Vars
-
-Backend:
-
-- `ELEVENLABS_API_KEY`
-- `ELEVENLABS_VOICE_ID`
-- optional: `ELEVENLABS_TTS_MODEL` (defaults to `eleven_flash_v2_5`)
-- optional: `ELEVENLABS_STT_MODEL` (defaults to `scribe_v1`)
-- optional: `ELEVENLABS_STT_LANGUAGE`
-- `GEMINI_API_KEY`
-- optional: `GEMINI_MODEL` (defaults to `gemini-2.0-flash`)
+- Interview sessions are in-memory (`SESSIONS` dict in `interview.py`).
+- Restarting backend clears active sessions.
+- Final PDF persistence is handled after completion by backend session finalization.

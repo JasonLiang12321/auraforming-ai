@@ -1,52 +1,52 @@
-# ElevenLabs Agent Config
+# ElevenLabs Integration (Current, No Agent Mode)
 
-This file stores the canonical prompt/config text for the ElevenLabs Conversational Agent used in this project.
+## Important Update
 
-## Required Dynamic Variables
+This project **does not currently use ElevenLabs Conversational Agent prompt overrides** for the active interview flow.
 
-The agent config uses these dynamic variables:
+- No dynamic variables like `FIRST_MISSING_FIELD_NAME` are required in production flow.
+- The old conversational-agent prompt template is deprecated in this repo.
 
-- `REQUIRED_FIELDS_JSON`
-- `MISSING_FIELDS_LIST`
-- `FIRST_MISSING_FIELD_NAME`
+Current architecture:
 
-If they are missing, ElevenLabs may end the session with errors like:
-`Missing required dynamic variables in first message: {'FIRST_MISSING_FIELD_NAME'}`.
+- ElevenLabs handles:
+  - Speech-to-Text (STT)
+  - Text-to-Speech (TTS)
+- Gemini handles:
+  - turn reasoning
+  - field validation
+  - next-question generation
 
-## System Prompt (Copy/Paste)
+## Runtime Path
 
-```text
-You are a helpful, patient, and highly accurate AI assistant tasked with helping users complete business forms verbally.
+Frontend (`AgentPage`) calls backend interview endpoints:
 
-Your ultimate goal is to collect specific pieces of information to fill out a JSON schema. You will do this by interviewing the user conversationally.
+1. `POST /api/agent/<agent_id>/interview/start`
+2. `POST /api/agent/<agent_id>/interview/turn-audio`
+3. `POST /api/agent/<agent_id>/interview/speak` (for spoken prompts)
 
-CURRENT SCHEMA TO FILL:
-{{REQUIRED_FIELDS_JSON}}
+Backend (`backend/routes/interview.py`) calls ElevenLabs HTTP APIs directly:
 
-MISSING FIELDS:
-{{MISSING_FIELDS_LIST}}
+- `POST /v1/speech-to-text`
+- `POST /v1/text-to-speech/<voice_id>`
 
-### CONVERSATION RULES:
+## Required Environment Variables
 
-1. ONE AT A TIME: You must only ask for ONE missing piece of information at a time. Never list multiple fields or overwhelm the user.
-2. VALIDATE & ADVANCE: When the user answers, silently evaluate if their response satisfies the current field's requirements.
-   - If YES: Accept the answer, update your internal state, and naturally transition to asking for the next missing field.
-   - If NO/UNCLEAR: Politely ask for clarification.
-3. EDUCATE & PRACTICE: If the user indicates they are confused by a complex form field, you must immediately pause data collection. Explain the concept in simple terms, and explicitly provide practice specifically for the concepts prompted. Give them a quick hypothetical scenario to test their understanding before returning to the actual form question.
-4. HANDLE INTERRUPTIONS: If the user interrupts you or changes the subject slightly, gracefully acknowledge their input, answer their query, and gently steer the conversation back to the current missing field.
-5. NO HALLUCINATIONS: Do not ask for any information outside of the provided MISSING FIELDS list.
+- `ELEVENLABS_API_KEY` (required)
+- `ELEVENLABS_VOICE_ID` (required for TTS)
 
-### COMPLETION:
-Once all fields in the CURRENT SCHEMA TO FILL have been successfully gathered, you must:
-1. Briefly thank the user for their time.
-2. Inform them that their document is being generated and they can click the download button shortly.
-3. Output the exact phrase: "[[INTERVIEW_COMPLETE]]" so the backend knows to trigger the final document generation.
+Optional:
 
-Begin the conversation by warmly welcoming the user and asking for the very first item on the MISSING FIELDS list.
-```
+- `ELEVENLABS_TTS_MODEL` (default: `eleven_flash_v2_5`)
+- `ELEVENLABS_STT_MODEL` (default: `scribe_v1`)
+- `ELEVENLABS_STT_LANGUAGE` (fallback language code for STT)
 
-## First Message (Copy/Paste)
+## Legacy Signed URL Endpoint
 
-```text
-Hi there! I'm here to help you complete your form today. We'll take it one step at a time, and if anything is confusing, just let me know and we can practice it together. To get started, could you please tell me your {{FIRST_MISSING_FIELD_NAME}}?
-```
+`GET /api/agent/<agent_id>/signed-url` still exists in `backend/routes/voice.py` for legacy ConvAI signed URL workflows, but it is **not used by the current primary frontend interview flow**.
+
+## Why this design
+
+- Keeps conversation logic centralized in backend (Gemini + session state)
+- Avoids ConvAI override restrictions (`prompt`, `first_message`, dynamic variable mismatches)
+- Makes behavior auditable and deterministic from one code path

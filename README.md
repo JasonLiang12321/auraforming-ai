@@ -1,155 +1,63 @@
-# Hackathon Starter: React + Flask
 
-Lean full-stack starter with:
-- Frontend: React + Vite
-- Backend: Flask + Flask-CORS
-- Health check endpoint: `GET /api/health`
-- Business upload endpoint: `POST /api/admin/upload`
-- Share page route: `/agent/{agent_id}` (frontend)
-- Agent details endpoint: `GET /api/agent/{agent_id}`
-- Guided interview start endpoint: `POST /api/agent/{agent_id}/interview/start`
-- Guided interview turn endpoint: `POST /api/agent/{agent_id}/interview/turn`
-- Guided interview audio turn endpoint: `POST /api/agent/{agent_id}/interview/turn-audio`
-- Interview speech synthesis endpoint: `POST /api/agent/{agent_id}/interview/speak`
-- Completed sessions endpoint: `GET /api/admin/dashboard/sessions`
-- Completed session detail endpoint: `GET /api/admin/dashboard/sessions/{session_id}`
-- ElevenLabs prompt config doc: `docs/ElevenlabsAgentConfig.md` (legacy conversational mode)
+  <img src="docs/images/wordmark.svg" alt="auraforming.ai" width="520" />
 
-## Prerequisites
+<hr/>
+<img src="docs/images/agent-interview.gif" alt="Agent interview" width="380" />
 
-- Python 3.10+
-- Node.js 18+ and npm
+## Overview
 
-## Project Structure
+Voice-first form intake for businesses.  
+Upload a blank fillable PDF, generate a shareable interview link, and let clients complete forms through a guided AI conversation.
 
-```text
-.
-├── backend/
-│   ├── app.py
-│   ├── storage.py
-│   ├── requirements.txt
-│   └── routes/
-│       ├── voice.py
-│       ├── upload.py
-│       └── health.py
-└── frontend/
-    ├── package.json
-    └── src/
-        ├── components/
-        ├── pages/
-        └── services/
-```
+## Project Description
 
-## 1) Install Dependencies
+`auraforming.ai` turns complex paperwork into a structured, multilingual voice workflow.  
+The business uploads a PDF once; the platform extracts fields, creates an `agent_id`, and serves a client-facing interview page. During the interview, ElevenLabs handles speech I/O while Gemini evaluates each answer field-by-field and drives the next prompt. At completion, the backend writes answers into the PDF and stores the intake for admin review.
 
-From the project root:
+## Demo
+
+- Video demo: `[TO BE ADDED]()`
+
+## Tech Stack
+
+- Frontend: React, Vite, React Router
+- Backend: Flask, Flask-CORS
+- Data: SQLite + filesystem storage
+- PDF: PyMuPDF (`fitz`)
+- AI reasoning: Gemini API (`gemini-2.0-flash` by default)
+- Voice: ElevenLabs STT + TTS
+
+## Quick Start
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r backend/requirements.txt
+npm --prefix frontend install
 ```
 
-Then install frontend deps:
+Set required env vars:
 
 ```bash
-cd frontend
-npm install
-cd ..
-```
-
-## 2) Run the Backend (Terminal 1)
-
-From project root:
-
-```bash
-source .venv/bin/activate
-python backend/app.py
-```
-
-Backend runs on: `http://127.0.0.1:5050`
-
-## 3) Run the Frontend (Terminal 2)
-
-From project root:
-
-```bash
-cd frontend
-npm run dev
-```
-
-Frontend runs on: `http://127.0.0.1:5173`
-
-Pages:
-- Admin: `http://127.0.0.1:5173/admin`
-- Admin dashboard: `http://127.0.0.1:5173/admin/dashboard`
-- End-user: `http://127.0.0.1:5173/agent/<agent_id>`
-
-## 3.1) ElevenLabs Keys Required
-
-Set these before running backend:
-
-```bash
-export ELEVENLABS_API_KEY="your_api_key"
-export ELEVENLABS_VOICE_ID="your_tts_voice_id"
-export ELEVENLABS_TTS_MODEL="eleven_flash_v2_5"
-export ELEVENLABS_STT_MODEL="scribe_v1"
 export GEMINI_API_KEY="your_google_ai_key"
-export GEMINI_MODEL="gemini-2.0-flash"
+export ELEVENLABS_API_KEY="your_elevenlabs_key"
+export ELEVENLABS_VOICE_ID="your_voice_id"
 ```
 
-Notes:
-- Interview flow is now deterministic:
-  - browser records user audio
-  - backend sends audio to ElevenLabs STT
-  - backend sends transcript to Gemini
-  - backend sends Gemini response text to ElevenLabs TTS
-- Guided interview validation is handled by Gemini.
-
-## 4) Verify API Connection
-
-In a third terminal:
+Run:
 
 ```bash
-curl http://127.0.0.1:5050/api/health
+python backend/app.py
+npm --prefix frontend run dev
 ```
 
-Expected response:
+- Backend: `http://127.0.0.1:5050`
+- Frontend: `http://127.0.0.1:5173`
 
-```json
-{"service":"flask-backend","status":"ok"}
-```
+## Documentation
 
-## 5) Create Agent From Blank PDF
-
-```bash
-curl -X POST http://127.0.0.1:5050/api/admin/upload \
-  -F "file=@/absolute/path/to/blank-form.pdf"
-```
-
-Expected response shape:
-
-```json
-{
-  "filename": "blank-form.pdf",
-  "agent_id": "a1b2c3d4",
-  "share_url": "/agent/a1b2c3d4",
-  "fieldCount": 2,
-  "widgetNames": ["Text_Field_01", "Checkbox_02"]
-}
-```
-
-Open this share URL in frontend:
-
-```text
-http://127.0.0.1:5173/agent/a1b2c3d4
-```
-
-## Optional: Change Backend URL in Frontend
-
-Set an env var if needed:
-
-```bash
-cd frontend
-echo "VITE_API_BASE_URL=http://127.0.0.1:5050" > .env.local
-```
+- Setup and startup: `docs/SETUP_AND_RUN.md`
+- System architecture and API map: `docs/SYSTEM_OVERVIEW.md`
+- Docs index: `docs/README.md`
+- Gemini details: `docs/GeminiIntegration.md`
+- ElevenLabs integration notes (no Agent mode): `docs/ElevenlabsAgentConfig.md`

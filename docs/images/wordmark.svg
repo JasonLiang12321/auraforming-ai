@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="980" height="118" viewBox="30 52 980 118" role="img" aria-label="auraforming.ai">
+  <style><![CDATA[
+    @import url("https://fonts.googleapis.com/css2?family=Orbitron:wght@700;800&display=swap");
+    .wordmarkText {
+      font-family: "Orbitron", "Inter", "Segoe UI", Arial, sans-serif;
+      font-weight: 700;
+      letter-spacing: 1px;
+    }
+  ]]></style>
+  <defs>
+    <linearGradient id="textGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#8f6f42" />
+      <stop offset="100%" stop-color="#7d5f35" />
+    </linearGradient>
+    <radialGradient id="orbGrad" cx="35%" cy="30%" r="75%">
+      <stop offset="0%" stop-color="#f7edd8" />
+      <stop offset="36%" stop-color="#d4b07a" />
+      <stop offset="82%" stop-color="#9f7845" />
+      <stop offset="100%" stop-color="#76562f" />
+    </radialGradient>
+    <filter id="orbGlow" x="-80%" y="-80%" width="260%" height="260%">
+      <feGaussianBlur stdDeviation="3.6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+  <g transform="translate(35,142)">
+    <text
+      class="wordmarkText"
+      x="0"
+      y="0"
+      font-size="118"
+      fill="url(#textGrad)"
+    >
+      auraforming
+    </text>
+
+    <circle cx="760" cy="-9" r="20" fill="url(#orbGrad)" filter="url(#orbGlow)" />
+
+    <text
+      class="wordmarkText"
+      x="802"
+      y="0"
+      font-size="118"
+      fill="url(#textGrad)"
+    >
+      ai
+    </text>
+  </g>
+</svg>
