@@ -2,7 +2,7 @@
   <img src="docs/images/wordmark.svg" alt="auraforming.ai" width="520" />
 
 <hr/>
-<img src="docs/images/agent-interview.gif" alt="Agent interview" width="380" />
+<img src="docs/images/agent-interview.gif" alt="Agent interview" width="750" />
 
 ## Overview
 
